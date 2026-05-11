@@ -1,0 +1,103 @@
+{
+  "title": "Importer",
+  "upload-files": "Téléverser des fichiers",
+  "drag-drop": "Glissez-déposez votre fichier ici",
+  "click-browse": "ou cliquez pour parcourir",
+  "section-climatic-title": "Données climatiques",
+  "required-badge": "OBLIGATOIRE",
+  "section-additional-title": "Données supplémentaires",
+  "choose-one-badge": "CHOISIR UNE",
+  "section-additional-description": "Sélectionnez le type de données à inclure avec le jeu de données climatiques.",
+  "continue": "Continuer",
+  "continue-tooltip": "Téléversez les données climatiques et un jeu de données supplémentaire pour continuer",
+  "demo-data-prefix": "Vous n'avez pas de données ? ",
+  "demo-data-link": "Essayer avec des données de démonstration →",
+  "file-error-csv-excel": "Le fichier doit être .csv ou Excel",
+  "file-error-fasta": "Le fichier doit être .fasta",
+  "file-error-json": "Le fichier doit être .json ou .fasta",
+  "file-error-not-aligned": "Les séquences n'ont pas toutes la même longueur. Assurez-vous que le fichier est aligné.",
+  "errors": {
+    "number-of-columns": "Vous devez sélectionner au moins une colonne",
+    "name-required": "Vous devez donner un nom à votre jeu de données",
+    "consent-required": "Vous devez confirmer votre préférence de stockage des données avant la soumission",
+    "temporary-storage-unavailable": "Le stockage temporaire est indisponible pour le moment. Veuillez réessayer dans un instant.",
+    "submit-failed": "Impossible de terminer votre analyse. Veuillez réessayer.",
+    "specimen-id-mismatch": "Les identifiants de spécimens de votre arbre génétique ne correspondent pas à ceux de vos données climatiques. Veuillez vous assurer que les deux fichiers font référence aux mêmes spécimens."
+  },
+  "email": {
+    "invalid": "Adresse e-mail invalide",
+    "notify-on-ready": "Un e-mail sera envoyé lorsque les résultats seront prêts",
+    "placeholder": "Entrez votre adresse e-mail",
+    "send": "Envoyer l'e-mail"
+  },
+  "popup": {
+    "title": "Vos résultats sont en cours de préparation !",
+    "description-delay": "Cela peut prendre quelques minutes.",
+    "description-email": "Entrez votre e-mail pour recevoir une notification lorsque vos résultats seront prêts.",
+    "status": {
+      "pending": "Traitement en cours...",
+      "finalizing": "Finalisation des résultats...",
+      "complete": "Analyse terminée !",
+      "error": "Une erreur est survenue"
+    },
+    "time-remaining-hr": "~{n} h restantes",
+    "time-remaining-min": "~{n} min restantes",
+    "time-remaining-sec": "~{n} sec restantes",
+    "title-complete": "Analyse terminée !",
+    "title-error": "Une erreur est survenue",
+    "error-prefix": "Erreur : "
+  },
+  "popup-done": {
+    "title": "Résultats terminés !",
+    "link-results": "Tous les résultats",
+    "link-result": "Voir le résultat"
+  },
+  "submit": {
+    "analyse-data": "Analyser les données",
+    "select-columns": "Sélectionnez les colonnes à analyser",
+    "enter-dataset-name": "Entrez le nom du jeu de données",
+    "placeholder-dataset-name": "Entrez le nom du jeu de données",
+    "consent-question": "Consentez-vous au stockage de vos données téléversées dans la base de données ?",
+    "consent-save-data-yes": "Oui, vous pouvez stocker mes données téléversées et les résultats générés",
+    "consent-save-data-no": "Non, conservez mes données temporairement seulement",
+    "submit": "Soumettre"
+  },
+  "climatic": {
+    "data-preview": "Aperçu des données",
+    "table": {
+      "filter-placeholder": "Filtrer les données..."
+    },
+    "generate-graph": "Générez votre graphique",
+    "insert-x-axis": "Insérer les données de l'axe X",
+    "insert-y-axis": "Insérer les données de l'axe Y",
+    "chart-type": "Type de graphique",
+    "chart-bar": "Graphique à barres",
+    "chart-scatter": "Nuage de points",
+    "chart-line": "Graphique linéaire",
+    "chart-pie": "Diagramme circulaire",
+    "select-placeholder": "Sélectionner...",
+    "select-map-data": "Sélectionnez les données pour la carte choroplèthe",
+    "empty-graph-message": "Veuillez sélectionner les données des axes X et Y et au moins un type de graphique pour générer un graphique",
+    "no-map": "Aucune carte à afficher."
+  },
+  "genetic": {
+    "alignment-chart": "Graphique d'alignement"
+  },
+  "data-type": {
+    "genetic": {
+      "label": "Données génétiques",
+      "description": "Données de séquences ou de variants",
+      "upload-label": "Téléverser des données génétiques (.fasta)"
+    },
+    "aligned": {
+      "label": "Données génétiques alignées",
+      "description": "Séquences pré-alignées",
+      "upload-label": "Téléverser des données génétiques alignées (.fasta, .json)"
+    },
+    "tree": {
+      "label": "Arbre génétique",
+      "description": "Données d'arbre phylogénétique",
+      "upload-label": "Téléverser un arbre génétique (.json)"
+    }
+  }
+}

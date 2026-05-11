@@ -1,0 +1,23 @@
+{
+  "title": "Results",
+  "empty": "You have no results yet. You can start a new job by going to the \"Upload data\" page",
+  "card": {
+    "access": "Access",
+    "created": "Created",
+    "expired": "Expired",
+    "temporary": "Temporary result",
+    "expired-now": "Expired",
+    "expire-in-minutes": "Expires in {count}min",
+    "expire-in-hours-minutes": "Expires in {hours}h{minutes}min",
+    "status": {
+      "error": "ERROR",
+      "success": "SUCCESS",
+      "in-progress": "IN PROGRESS",
+      "unknown": "UNKNOWN",
+      "climatic-trees": "Building climatic trees",
+      "alignment": "Aligning sequences",
+      "genetic-trees": "Building genetic trees",
+      "output": "Generating output"
+    }
+  }
+}

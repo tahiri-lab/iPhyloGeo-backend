@@ -12,8 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-# Points to iPhyloGeo/genetic_settings_file.json regardless of CWD
-_SETTINGS_FILE = Path(__file__).resolve().parents[4] / "iPhyloGeo" / "genetic_settings_file.json"
+_SETTINGS_FILE = Path(__file__).resolve().parents[2] / "genetic_settings_file.json"
 
 
 @router.get("")

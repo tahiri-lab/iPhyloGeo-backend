@@ -1,0 +1,22 @@
+{
+    "bootstrap_threshold": 10,
+    "dist_threshold": 10000,
+    "window_size": 400,
+    "step_size": 200,
+    "alignment_method": "PairwiseAlign",
+    "distance_method": "LeastSquare",
+    "fit_method": "WiderFit",
+    "tree_type": "BioPython",
+    "rate_similarity": 50,
+    "method_similarity": "Hamming",
+    "preprocessing_genetic": "Disabled",
+    "preprocessing_climatic": "Disabled",
+    "preprocessing_threshold_genetic": 0,
+    "preprocessing_threshold_climatic": 0,
+    "correlation_climatic_enabled": "Disabled",
+    "correlation_threshold_climatic": 0.9,
+    "permutations_mantel_test": 999,
+    "permutations_protest": 999,
+    "mantel_test_method": "Pearson",
+    "statistical_test": "Both"
+}

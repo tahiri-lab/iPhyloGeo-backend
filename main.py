@@ -1,41 +1,20 @@
 """
 iPhyloGeo FastAPI backend.
 
-Reuses the existing Python modules in ../iPhyloGeo/apps/ (db, utils, enums)
-without duplicating code. The CWD is changed to iPhyloGeo/ so that relative
-paths inside those modules (genetic_settings_file.json, aphylogeo/bin/tmp)
-resolve correctly.
-
 Start:
     uvicorn main:app --reload --port 8000
 """
 
-import sys
 import os
 import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore", message=r"The Bio\.Application modules")
 
-# ── Path setup (must happen before any app-module imports) ────────────────────
-_HERE = Path(__file__).resolve().parent
-_IPHYLOGEO_ROOT = _HERE.parent / "iPhyloGeo"
-_IPHYLOGEO_APPS = _IPHYLOGEO_ROOT / "apps"
-
-if str(_IPHYLOGEO_APPS) not in sys.path:
-    sys.path.insert(0, str(_IPHYLOGEO_APPS))
-
-# Change CWD so relative paths in the legacy code resolve correctly:
-#   - genetic_settings_file.json (used in utils.py)
-#   - aphylogeo/bin/tmp          (used in create_genetic_trees)
-os.chdir(_IPHYLOGEO_ROOT)
-
-# ── Environment ───────────────────────────────────────────────────────────────
 from dotenv import load_dotenv
 
-load_dotenv(_HERE / ".env")
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
-# ── FastAPI app ───────────────────────────────────────────────────────────────
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

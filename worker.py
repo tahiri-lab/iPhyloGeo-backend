@@ -1,9 +1,6 @@
 """
 RQ worker entry point for iPhyloGeoBackend.
 
-Adds iPhyloGeo/apps/ to sys.path so the worker resolves the same module
-paths that the FastAPI server uses.
-
 Usage:
     python worker.py
 """
@@ -15,18 +12,8 @@ import os
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_IPHYLOGEO_ROOT = _HERE.parent / "iPhyloGeo"
-_APPS_DIR = _IPHYLOGEO_ROOT / "apps"
-
-if str(_APPS_DIR) not in sys.path:
-    sys.path.insert(0, str(_APPS_DIR))
-
-# Keep CWD consistent with the FastAPI server so relative paths work
-os.chdir(_IPHYLOGEO_ROOT)
-
 from dotenv import load_dotenv
-load_dotenv(_HERE / ".env")
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 from redis import Redis
 from rq import Queue
@@ -57,7 +44,6 @@ if __name__ == "__main__":
     is_windows = sys.platform == "win32"
     print(f"[Worker] Platform: {'Windows' if is_windows else sys.platform}")
     print(f"[Worker] Redis: {redis_url}")
-    print(f"[Worker] Python path includes: {_APPS_DIR}")
 
     if is_windows:
         class _WindowsWorker(SimpleWorker):
