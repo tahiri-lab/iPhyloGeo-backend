@@ -122,6 +122,42 @@ python worker.py
 
 The API will be available at http://localhost:8000 and the interactive docs at http://localhost:8000/docs.
 
+## Running the tests
+
+The test suite uses `pytest` with all external services (MongoDB, Redis, RQ) mocked — no running database or queue is required.
+
+### Run all tests
+
+```bash
+# With the virtual environment activated
+python -m pytest tests/ -v
+```
+
+### Run a specific file
+
+```bash
+python -m pytest tests/test_upload.py -v
+python -m pytest tests/test_unit.py -v
+```
+
+### Run a single test
+
+```bash
+python -m pytest tests/test_results.py::test_download_result_returns_excel -v
+```
+
+### Test structure
+
+| File | Scope |
+|---|---|
+| `tests/conftest.py` | Global mock setup (pymongo, redis, rq) and shared fixtures |
+| `tests/test_health.py` | `GET /health` |
+| `tests/test_upload.py` | Upload endpoints (CSV, Excel, FASTA, JSON) and file previews |
+| `tests/test_results.py` | Results CRUD, Excel download, email notification |
+| `tests/test_settings.py` | `GET /api/settings`, `PUT /api/settings` |
+| `tests/test_jobs.py` | Job creation, pipeline enqueueing, status polling |
+| `tests/test_unit.py` | Pure-function unit tests (date helpers, FASTA parser, enums, alignment gap filter, etc.) |
+
 ## Docker deployment
 
 To build and run the full stack with Docker (API, worker, MongoDB, Redis):
