@@ -13,12 +13,14 @@ from typing import Any
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import db.controllers.results as results_ctrl
 import utils.mail as mail
+
+import redis_client
 
 router = APIRouter(prefix="/api/results", tags=["results"])
 
@@ -97,11 +99,36 @@ class EmailRequest(BaseModel):
     email: str
     lang: str = "en"
 
+def rate_limit_emails(request: Request):
+    WINDOW = 60  # 1 minute
+    LIMIT = 10
+    BAN_TIME = 20 * 60  # 20 minutes
+    r = redis_client.get_redis()
+    print(r)
 
+    ip = request.client.host
+    count_key = f"email_count:{ip}"
+    ban_key = f"email_ban:{ip}"
+
+    if r.get(ban_key):
+        raise HTTPException(429, "Temporarily banned. Try again later.")
+
+    count = int(r.incr(count_key))
+    r.expire(count_key, WINDOW, nx=True)
+
+    if count > LIMIT:
+        r.delete(count_key)
+        r.setex(ban_key, BAN_TIME, 1)
+        raise HTTPException(429, "Too many requests. You are now temporarily banned.")
+    
 @router.post("/{result_id}/email")
-async def email_result(result_id: str, req: EmailRequest):
+async def email_result(result_id: str, req: EmailRequest, request: Request):
     try:
+        rate_limit_emails(request)
         results_url = f"/result/{result_id}"
+        error_str = mail.verify_email_address(req.email)
+        if error_str is not None:
+            raise HTTPException(400, error_str)
         success = mail.send_results_ready_email(req.email, results_url, req.lang)
         if not success:
             raise HTTPException(500, "Failed to send email — check server logs")
