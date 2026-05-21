@@ -104,7 +104,6 @@ def rate_limit_emails(request: Request):
     LIMIT = 10
     BAN_TIME = 20 * 60  # 20 minutes
     r = redis_client.get_redis()
-    print(r)
 
     ip = request.client.host
     count_key = f"email_count:{ip}"
