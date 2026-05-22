@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 from redis import Redis
 from rq import Queue
 from rq.worker import SimpleWorker, Worker
-
+import redis_client
 
 class _NoopDeathPenalty:
     """No-op death penalty for Windows (no SIGALRM)."""
@@ -37,20 +37,20 @@ class _NoopDeathPenalty:
 
 
 if __name__ == "__main__":
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-    conn = Redis.from_url(redis_url)
-    queues = [Queue(connection=conn)]
+    r = redis_client.get_redis()
+
+    queues = [Queue(connection=r)]
 
     is_windows = sys.platform == "win32"
     print(f"[Worker] Platform: {'Windows' if is_windows else sys.platform}")
-    print(f"[Worker] Redis: {redis_url}")
+    print(f"[Worker] Redis: {redis_client.redis_url}")
 
     if is_windows:
         class _WindowsWorker(SimpleWorker):
             death_penalty_class = _NoopDeathPenalty
 
-        worker = _WindowsWorker(queues, connection=conn)
+        worker = _WindowsWorker(queues, connection=r)
         worker.work()
     else:
-        worker = Worker(queues, connection=conn)
+        worker = Worker(queues, connection=r)
         worker.work(with_scheduler=True)

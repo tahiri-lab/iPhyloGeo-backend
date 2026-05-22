@@ -9,7 +9,8 @@ db/db_validator.py, utils/background_tasks.py, etc. uses mocked objects.
 import os
 import sys
 from unittest.mock import MagicMock
-
+import redis_client
+import redis
 
 from bson import ObjectId
 
@@ -32,15 +33,7 @@ _mock_redis_conn = MagicMock()
 _mock_redis_conn.get.return_value = None
 _mock_redis_conn.ping.return_value = True
 
-_mock_redis_exceptions = MagicMock()
-_mock_redis_exceptions.RedisError = _FakeRedisError
-
-_mock_redis_module = MagicMock()
-_mock_redis_module.Redis.from_url.return_value = _mock_redis_conn
-_mock_redis_module.exceptions = _mock_redis_exceptions
-
-sys.modules["redis"] = _mock_redis_module
-sys.modules["redis.exceptions"] = _mock_redis_exceptions
+redis_client._r = _mock_redis_conn
 
 # ── Mock rq ───────────────────────────────────────────────────────────────────
 _mock_rq_job_instance = MagicMock()
@@ -98,6 +91,12 @@ from main import app
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
+@pytest.fixture
+def test_redis():
+    r = redis.Redis.from_url("redis://localhost:6380", decode_responses=True)
+    r.flushdb()
+    yield r
+    r.flushdb()
 
 @pytest.fixture
 def client():

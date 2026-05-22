@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pandas as pd
 from bson import ObjectId
+import redis
 
 FAKE_RESULT_ID = ObjectId("507f1f77bcf86cd799439012")
 STR_ID = str(FAKE_RESULT_ID)
@@ -114,24 +115,55 @@ def test_download_result_returns_excel(client, results_col):
 
 
 # ── Email result ───────────────────────────────────────────────────────────────
-
+def _post_email_request(client, email_address, returns: bool):
+    with patch("api.routes.results.mail.send_results_ready_email", return_value=returns):
+        return client.post(
+            f"/api/results/{STR_ID}/email",
+            json={"email": email_address, "lang": "en"},
+        )
 
 def test_email_result_success(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
-    with patch("api.routes.results.mail.send_results_ready_email", return_value=True):
-        r = client.post(
-            f"/api/results/{STR_ID}/email",
-            json={"email": "test@example.com", "lang": "en"},
-        )
+    r = _post_email_request(client, "willbou2@gmail.com", True)
     assert r.status_code == 200
     assert "sent" in r.json()["message"].lower()
 
+def test_email_result_rate_limit_returns_429(client, results_col, test_redis):
+    
+    # Most of the time, we do not care about testing Redis, but here, we absolutely need to
+    with patch("redis_client.get_redis", return_value=test_redis):
+        # We want this API endpoint to block when there are 10 requests in a minute
+        results_col.find_one.return_value = _make_result_doc()
+        for _ in range(10):
+            r = _post_email_request(client, "willbou2@gmail.com", True)
+            assert r.status_code == 200
+
+        for _ in range(2):
+            r = _post_email_request(client, "willbou2@gmail.com", True)
+            assert r.status_code == 429
+            assert "banned" in r.json()["detail"].lower()
+
+        # We get rid of the ban by resetting redis
+        test_redis.flushdb()
+        for _ in range(10):
+            r = _post_email_request(client, "willbou2@gmail.com", True)
+            assert r.status_code == 200
+
+def test_email_result_bad_formatting_returns_400(client, results_col):
+    results_col.find_one.return_value = _make_result_doc()
+    r = _post_email_request(client, "testexample.com", True)
+    assert r.status_code == 400
+    message = r.json()["detail"].lower()
+    assert "invalid" in message and "format" in message
+
+def test_email_result_invalid_domain_returns_400(client, results_col):
+    results_col.find_one.return_value = _make_result_doc()
+    r = _post_email_request(client, "test@example.com", True)
+    assert r.status_code == 400
+    message = r.json()["detail"].lower()
+    assert "invalid" in message and "domain" in message
 
 def test_email_result_send_failure_returns_500(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
-    with patch("api.routes.results.mail.send_results_ready_email", return_value=False):
-        r = client.post(
-            f"/api/results/{STR_ID}/email",
-            json={"email": "test@example.com", "lang": "en"},
-        )
+    r = _post_email_request(client, "willbou2@gmail.com", False)
     assert r.status_code == 500

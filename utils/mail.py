@@ -1,5 +1,5 @@
 """
-Email utility to send notifications to users.
+Emai il utility to send notifications to users.
 Shared component used by getStarted.py (pipeline start) and result.py (results view).
 """
 
@@ -7,6 +7,7 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email_validator import validate_email, EmailSyntaxError, EmailUndeliverableError
 
 from assets.logo_base64 import LOGO_BASE64
 from pathlib import Path
@@ -155,6 +156,24 @@ def get_results_email_template(results_url, lang="en"):
 </body>
 </html>
 """
+
+def verify_email_address(user_email):
+    """
+    Verify the user email for any error
+
+    Args:
+    user_email (str): Recipient email
+
+    Returns
+    Error string or None
+    """
+    try:
+        validate_email(user_email, check_deliverability=True)
+        return None
+    except EmailSyntaxError:
+        return "The format of the email address is invalid"
+    except EmailUndeliverableError:
+        return "The domain of the email address is invalid"
 
 
 def send_results_ready_email(user_email, results_url, lang="en"):
