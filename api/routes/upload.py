@@ -20,6 +20,8 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 import db.controllers.files as files_ctrl
 from db.db_validator import files_db
 
+from utils.utils import is_file_valid
+
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
 
@@ -29,20 +31,38 @@ async def upload_climatic(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        if filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(content))
-        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
-            df = pd.read_excel(io.BytesIO(content))
-        else:
+        ext = is_file_valid(
+            filename,
+            content,
+            [".csv", ".xlsx", ".xls"],
+            ["text/csv",
+             "text/plain",
+             "application/vnd.ms-excel",
+             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             "application/zip",
+             "application/x-zip-compressed"],
+            50*1024*1024)
+
+        readers = {
+            ".csv": lambda c: pd.read_csv(io.BytesIO(c)),
+            ".xlsx": lambda c: pd.read_excel(io.BytesIO(c)),
+            ".xls": lambda c: pd.read_excel(io.BytesIO(c)),
+        }
+        reader = readers.get(ext)
+
+        if reader is None:
             raise HTTPException(400, "Only CSV or Excel (.csv / .xlsx / .xls) files are allowed")
 
-        # Store as JSON-encoded string; save_files() will decode it to a dict
+        df = reader(content)
+
         file_data = {"file_name": filename, "file": df.to_json(), "type": "climatic"}
         file_id = files_ctrl.save_files([file_data])
         return {"file_id": str(file_id)}
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to process climatic file: {exc}") from exc
 
@@ -53,13 +73,23 @@ async def upload_genetic(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        if not filename.endswith(".fasta"):
+        ext = is_file_valid(
+            filename,
+            content,
+            [".fasta"],
+            ["text/plain"],
+            50*1024*1024)
+
+        readers = {
+            ".fasta": lambda s: files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(s), "fasta")),
+        }
+        reader = readers.get(ext)
+
+        if reader is None:
             raise HTTPException(400, "Only FASTA (.fasta) files are allowed")
 
         fasta_str = content.decode("utf-8")
-        fasta_dict = files_ctrl.fasta_to_str(
-            SeqIO.parse(io.StringIO(fasta_str), "fasta")
-        )
+        fasta_dict = reader(fasta_str)
 
         file_data = {"file_name": filename, "file": fasta_dict, "type": "genetic"}
         file_id = files_ctrl.save_files([file_data])
@@ -67,6 +97,8 @@ async def upload_genetic(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to process genetic file: {exc}") from exc
 
@@ -78,17 +110,29 @@ async def upload_aligned(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        if not (filename.endswith(".json") or filename.endswith(".fasta")):
+        ext = is_file_valid(
+            filename,
+            content,
+            [".fasta", ".json"],
+            ["text/plain",
+             "application/json"],
+            50*1024*1024)
+
+        def handle_json(s):
+            parsed = json.loads(s)
+            return parsed if isinstance(parsed, dict) else {"content": s}
+
+        readers = {
+            ".json": lambda s: handle_json(s),
+            ".fasta": lambda s: files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(s), "fasta")),
+        }
+        reader = readers.get(ext)
+
+        if reader is None:
             raise HTTPException(400, "Only JSON (.json) or FASTA (.fasta) files are allowed")
 
         data_str = content.decode("utf-8")
-
-        if filename.endswith(".json"):
-            parsed = json.loads(data_str)
-            stored = parsed if isinstance(parsed, dict) else {"content": data_str}
-        else:
-            # FASTA aligned: store as dict {seq_name: sequence}
-            stored = files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(data_str), "fasta"))
+        stored = reader(data_str)
 
         file_data = {"file_name": filename, "file": stored, "type": "aligned_genetic"}
         file_id = files_ctrl.save_files([file_data])
@@ -96,6 +140,8 @@ async def upload_aligned(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to process aligned file: {exc}") from exc
 
@@ -107,11 +153,27 @@ async def upload_tree(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        if not filename.endswith(".json"):
+        ext = is_file_valid(
+            filename,
+            content,
+            [".json"],
+            ["application/json"],
+            50*1024*1024)
+
+        def handle_json(s):
+            parsed = json.loads(s)
+            return parsed if isinstance(parsed, dict) else {"content": s}
+
+        readers = {
+            ".json": lambda s: handle_json(s),
+        }
+        reader = readers.get(ext)
+
+        if reader is None:
             raise HTTPException(400, "Only JSON (.json) files are allowed")
 
-        parsed = json.loads(content.decode("utf-8"))
-        stored = parsed if isinstance(parsed, dict) else {"content": content.decode("utf-8")}
+        data_str = content.decode("utf-8")
+        stored = reader(data_str)
 
         file_data = {"file_name": filename, "file": stored, "type": "genetic_tree"}
         file_id = files_ctrl.save_files([file_data])
@@ -119,6 +181,8 @@ async def upload_tree(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to process tree file: {exc}") from exc
 
@@ -153,7 +217,6 @@ async def preview_genetic(file_id: str):
         if not doc:
             raise HTTPException(404, "File not found")
         sequences: dict = doc.get("file", {})
-        # Truncate to first 300 chars for alignment preview
         preview = {name: str(seq)[:300] for name, seq in sequences.items()}
         return {"sequences": preview, "full_length": max((len(str(s)) for s in sequences.values()), default=0)}
     except HTTPException:
