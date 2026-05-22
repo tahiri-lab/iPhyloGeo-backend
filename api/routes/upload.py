@@ -20,8 +20,6 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 import db.controllers.files as files_ctrl
 from db.db_validator import files_db
 
-from utils.utils import is_file_valid
-
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
 
@@ -31,27 +29,12 @@ async def upload_climatic(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        ext = is_file_valid(
-            filename,
-            content,
-            [".csv",".xlsx",".xls"],
-            ["text/csv",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-            50*1024*1024)
-        
-        readers = {
-            ".csv": lambda content: pd.read_csv(io.BytesIO(content)),
-            ".xlsx": lambda content: pd.read_excel(io.BytesIO(content)),
-            ".xls": lambda content: pd.read_excel(io.BytesIO(content)),
-        }
-        reader = readers.get(ext)
-        
-        #this if might be unnecessairy because the function in utils already raises exceptions
-        if reader is None:
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
             raise HTTPException(400, "Only CSV or Excel (.csv / .xlsx / .xls) files are allowed")
-        
-        df = reader(content)
 
         # Store as JSON-encoded string; save_files() will decode it to a dict
         file_data = {"file_name": filename, "file": df.to_json(), "type": "climatic"}
@@ -70,24 +53,13 @@ async def upload_genetic(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        ext = is_file_valid(
-            filename,
-            content,
-            [".fasta"],
-            ["text/plain"],
-            50*1024*1024)
-        
-        readers = {
-            ".fasta": lambda fasta_str: files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(fasta_str), "fasta")),
-        }
-        reader = readers.get(ext)
-
-        #this if might be unnecessairy because the function in utils already raises exceptions
-        if reader is None:
+        if not filename.endswith(".fasta"):
             raise HTTPException(400, "Only FASTA (.fasta) files are allowed")
 
         fasta_str = content.decode("utf-8")
-        fasta_dict = reader(fasta_str)
+        fasta_dict = files_ctrl.fasta_to_str(
+            SeqIO.parse(io.StringIO(fasta_str), "fasta")
+        )
 
         file_data = {"file_name": filename, "file": fasta_dict, "type": "genetic"}
         file_id = files_ctrl.save_files([file_data])
@@ -106,32 +78,17 @@ async def upload_aligned(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        ext = is_file_valid(
-            filename,
-            content,
-            [".fasta",".json"],
-            ["text/plain",
-            "application/json"],
-            50*1024*1024)
-        
-        def handle_json(s):
-            parsed = json.loads(s)
-            return parsed if isinstance(parsed, dict) else {"content": s}
-        
-        readers = {
-            ".json": lambda data_str: handle_json(data_str),
-            ".fasta": lambda data_str: files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(data_str), "fasta")),
-        }
-        reader = readers.get(ext)
-        
-        #this if might be unnecessairy because the function in utils already raises exceptions
-        if reader is None:
+        if not (filename.endswith(".json") or filename.endswith(".fasta")):
             raise HTTPException(400, "Only JSON (.json) or FASTA (.fasta) files are allowed")
 
         data_str = content.decode("utf-8")
 
-        # FASTA aligned: store as dict {seq_name: sequence}
-        stored = reader(data_str)
+        if filename.endswith(".json"):
+            parsed = json.loads(data_str)
+            stored = parsed if isinstance(parsed, dict) else {"content": data_str}
+        else:
+            # FASTA aligned: store as dict {seq_name: sequence}
+            stored = files_ctrl.fasta_to_str(SeqIO.parse(io.StringIO(data_str), "fasta"))
 
         file_data = {"file_name": filename, "file": stored, "type": "aligned_genetic"}
         file_id = files_ctrl.save_files([file_data])
@@ -150,29 +107,11 @@ async def upload_tree(file: UploadFile = File(...)):
     filename = file.filename or ""
 
     try:
-        ext = is_file_valid(
-            filename,
-            content,
-            [".json"],
-            ["application/json"],
-            50*1024*1024)
-        
-        def handle_json(s):
-            parsed = json.loads(s)
-            return parsed if isinstance(parsed, dict) else {"content": s}
-        
-        readers = {
-            ".json": lambda data_str: handle_json(data_str),
-        }
-        reader = readers.get(ext)
-        
-        #this if might be unnecessairy because the function in utils already raises exceptions
-        if reader is None:
+        if not filename.endswith(".json"):
             raise HTTPException(400, "Only JSON (.json) files are allowed")
 
-        data_str = content.decode("utf-8")
-
-        stored = reader(data_str)
+        parsed = json.loads(content.decode("utf-8"))
+        stored = parsed if isinstance(parsed, dict) else {"content": content.decode("utf-8")}
 
         file_data = {"file_name": filename, "file": stored, "type": "genetic_tree"}
         file_id = files_ctrl.save_files([file_data])
