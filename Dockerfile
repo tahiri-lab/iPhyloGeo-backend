@@ -23,3 +23,5 @@ RUN mkdir -p /app/aphylogeo/bin && \
 # Copied here so the image works standalone. In development the docker-compose
 # volume mount overlays this with the live source for hot-reload.
 COPY . .
+
+CMD uvicorn main:app --host 0.0.0.0 --port $PORT
