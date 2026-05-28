@@ -132,6 +132,6 @@ async def email_result(result_id: str, req: EmailRequest, request: Request, back
     except Exception as exc:
         raise HTTPException(500, f"Failed to validate email: {exc}") from exc
 
-    results_url = f"/result/{result_id}"
+    results_url = f"/results?id={result_id}"
     background_tasks.add_task(mail.send_results_ready_email, req.email, results_url, req.lang)
     return {"message": "Email queued"}
