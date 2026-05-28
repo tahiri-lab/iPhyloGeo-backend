@@ -14,7 +14,7 @@ from utils.i18n import t
 def send_email(subject, content, user_email):
     try:
         sg = sendgrid.SendGridAPIClient(api_key=os.environ["SENDGRID_API_KEY"])
-        from_address = os.environ.get("EMAIL_FROM", "iphylogeo@gmail.com")
+        from_address = os.environ.get("EMAIL_USER", "iphylogeo@gmail.com")
         print(f"[Mail] Sending from={from_address} to={user_email}")
         message = Mail(
             from_email=from_address,
