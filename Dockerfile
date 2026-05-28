@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fasttree \
         clustalw \
         mafft \
+        libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python dependencies ───────────────────────────────────────────────────────
