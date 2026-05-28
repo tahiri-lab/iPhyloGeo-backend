@@ -3,7 +3,8 @@ Email utility to send notifications to users.
 """
 
 import os
-import resend
+import sendgrid
+from sendgrid.helpers.mail import Mail
 from email_validator import validate_email, EmailSyntaxError, EmailUndeliverableError
 
 from assets.logo_base64 import LOGO_BASE64
@@ -11,24 +12,16 @@ from utils.i18n import t
 
 
 def send_email(subject, content, user_email):
-    """
-    Send an email using Resend.
-
-    Args:
-        subject (str): Email subject
-        content (str): Email content (HTML)
-        user_email (str): Recipient email address
-    """
     try:
-        resend.api_key = os.environ["RESEND_API_KEY"]
-        from_address = os.environ.get("EMAIL_FROM", "iPhyloGeo <noreply@iphylogeo.ca>")
-
-        resend.Emails.send({
-            "from": from_address,
-            "to": [user_email],
-            "subject": subject,
-            "html": content,
-        })
+        sg = sendgrid.SendGridAPIClient(api_key=os.environ["SENDGRID_API_KEY"])
+        from_address = os.environ.get("EMAIL_FROM", "iphylogeo@gmail.com")
+        message = Mail(
+            from_email=from_address,
+            to_emails=user_email,
+            subject=subject,
+            html_content=content,
+        )
+        sg.send(message)
         print(f"[Mail] Email sent successfully to {user_email}")
         return True
     except Exception as e:
