@@ -49,7 +49,7 @@ def send_email(subject, content, user_email):
         message.attach(html_content)
 
         # Connect to SMTP server
-        email_session = smtplib.SMTP("smtp.gmail.com", 587)
+        email_session = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
         email_session.starttls()
         email_session.login(email_user, email_password)
         email_session.sendmail(email_user, user_email, message.as_string())
@@ -169,7 +169,7 @@ def verify_email_address(user_email):
     Error string or None
     """
     try:
-        validate_email(user_email, check_deliverability=True)
+        validate_email(user_email, check_deliverability=False)
         return None
     except EmailSyntaxError:
         return "The format of the email address is invalid"

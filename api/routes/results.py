@@ -13,7 +13,7 @@ from typing import Any
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -120,19 +120,18 @@ def rate_limit_emails(request: Request):
         r.setex(ban_key, BAN_TIME, 1)
         raise HTTPException(429, "Too many requests. You are now temporarily banned.")
     
-@router.post("/{result_id}/email")
-async def email_result(result_id: str, req: EmailRequest, request: Request):
+@router.post("/{result_id}/email", status_code=202)
+async def email_result(result_id: str, req: EmailRequest, request: Request, background_tasks: BackgroundTasks):
     try:
         rate_limit_emails(request)
-        results_url = f"/result/{result_id}"
         error_str = mail.verify_email_address(req.email)
         if error_str is not None:
             raise HTTPException(400, error_str)
-        success = mail.send_results_ready_email(req.email, results_url, req.lang)
-        if not success:
-            raise HTTPException(500, "Failed to send email — check server logs")
-        return {"message": "Email sent successfully"}
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to send email: {exc}") from exc
+        raise HTTPException(500, f"Failed to validate email: {exc}") from exc
+
+    results_url = f"/result/{result_id}"
+    background_tasks.add_task(mail.send_results_ready_email, req.email, results_url, req.lang)
+    return {"message": "Email queued"}
