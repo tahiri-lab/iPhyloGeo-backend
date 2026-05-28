@@ -1,34 +1,18 @@
 """
-Emai il utility to send notifications to users.
-Shared component used by getStarted.py (pipeline start) and result.py (results view).
+Email utility to send notifications to users.
 """
 
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import resend
 from email_validator import validate_email, EmailSyntaxError, EmailUndeliverableError
 
 from assets.logo_base64 import LOGO_BASE64
-from pathlib import Path
-from dotenv import dotenv_values
 from utils.i18n import t
-
-# File-based fallback config (used only when os.environ is not set)
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-_ENV_CONFIG = dotenv_values(_ENV_PATH)
-
-
-def _get_credentials():
-    """Read credentials at call time so FastAPI's load_dotenv always wins."""
-    user = os.environ.get("EMAIL_USER") or _ENV_CONFIG.get("EMAIL_USER", "iphylogeo@gmail.com")
-    password = os.environ.get("EMAIL_PASSWORD") or _ENV_CONFIG.get("EMAIL_PASSWORD", "")
-    return user, password
 
 
 def send_email(subject, content, user_email):
     """
-    Send an email using Gmail SMTP.
+    Send an email using Resend.
 
     Args:
         subject (str): Email subject
@@ -36,24 +20,15 @@ def send_email(subject, content, user_email):
         user_email (str): Recipient email address
     """
     try:
-        email_user, email_password = _get_credentials()
+        resend.api_key = os.environ["RESEND_API_KEY"]
+        from_address = os.environ.get("EMAIL_FROM", "iPhyloGeo <noreply@iphylogeo.ca>")
 
-        # Create message
-        message = MIMEMultipart("alternative")
-        message["From"] = email_user
-        message["To"] = user_email
-        message["Subject"] = subject
-
-        # HTML body
-        html_content = MIMEText(content, "html", "UTF-8")
-        message.attach(html_content)
-
-        # Connect to SMTP server
-        email_session = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
-        email_session.starttls()
-        email_session.login(email_user, email_password)
-        email_session.sendmail(email_user, user_email, message.as_string())
-        email_session.quit()
+        resend.Emails.send({
+            "from": from_address,
+            "to": [user_email],
+            "subject": subject,
+            "html": content,
+        })
         print(f"[Mail] Email sent successfully to {user_email}")
         return True
     except Exception as e:
