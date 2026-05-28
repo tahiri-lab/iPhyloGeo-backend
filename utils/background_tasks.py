@@ -803,7 +803,7 @@ def run_pipeline_task(
 
         if email:
             try:
-                results_url = f"/result/{result_id}"
+                results_url = f"/results?id={result_id}"
                 mail.send_results_ready_email(email, results_url, lang)
             except Exception as e:
                 print(f"[Warning] Could not send email: {e}")
