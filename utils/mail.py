@@ -40,8 +40,8 @@ def get_results_email_template(results_url, lang="en"):
         results_url (str): The URL path to the results (e.g., "/result/123")
     """
     # Ensure full URL if it's relative
-    if not results_url.startswith("http"):
-        frontend_base = os.environ.get("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app")
+    if not results_url.startswith("https"):
+        frontend_base = os.environ.get("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app?id=")
         full_url = f"{frontend_base}{results_url}"
     else:
         full_url = results_url
