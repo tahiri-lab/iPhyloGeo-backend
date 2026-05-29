@@ -371,13 +371,20 @@ def update_task_status(
     num_operations: int = None,
 ):
     """Update status/progress metadata for the corresponding RQ job."""
+    status_lower = str(status).lower()
+
+    # Let's sync the status in MongoDB to easily recover in case of failure
+    try:
+        results_ctrl.update_result({"_id": result_id, "status": status_lower})
+    except Exception as db_exc:
+        print(f"[Warning] Failed to sync phase status '{status_lower}' to MongoDB: {db_exc}")
+
     job = _resolve_job_for_result(result_id)
     if job is None:
         return
 
     meta = dict(job.meta or {})
 
-    status_lower = str(status).lower()
     meta["status"] = status_lower
     meta["sub_progress"] = None
 
