@@ -15,6 +15,7 @@ import pandas as pd
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from typing import Literal
 from pydantic import BaseModel
 
 import db.controllers.results as results_ctrl
@@ -97,7 +98,7 @@ async def download_result(result_id: str):
 
 class EmailRequest(BaseModel):
     email: str
-    lang: str = "en"
+    lang: Literal["en", "fr", "es"] = "en"
 
 def rate_limit_emails(request: Request):
     WINDOW = 60  # 1 minute

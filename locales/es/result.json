@@ -1,0 +1,9 @@
+{
+  "email-template": {
+    "subject": "¡Tus resultados de iPhyloGeo están listos!",
+    "title": "¡Tus resultados están listos!",
+    "completed": "Tu análisis filogeográfico ha sido completado.",
+    "view-prompt": "Haz clic en el botón a continuación para ver tus resultados (disponibles por 7 días):",
+    "button": "VER RESULTADOS"
+  }
+}
