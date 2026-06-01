@@ -11,11 +11,14 @@ GET  /api/upload/genetic/{file_id}/preview  → { sequences: {name: seq} }
 
 import io
 import json
+import logging
 
 import pandas as pd
 from Bio import SeqIO
 from bson import ObjectId
 from fastapi import APIRouter, File, HTTPException, UploadFile
+
+logger = logging.getLogger(__name__)
 
 import db.controllers.files as files_ctrl
 from db.db_validator import files_db
@@ -64,7 +67,8 @@ async def upload_climatic(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(500, f"Failed to process climatic file: {exc}") from exc
+        logger.exception("Failed to process climatic file")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.post("/genetic")
@@ -100,7 +104,8 @@ async def upload_genetic(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(500, f"Failed to process genetic file: {exc}") from exc
+        logger.exception("Failed to process genetic file")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.post("/aligned")
@@ -143,7 +148,8 @@ async def upload_aligned(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(500, f"Failed to process aligned file: {exc}") from exc
+        logger.exception("Failed to process aligned file")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.post("/tree")
@@ -184,7 +190,8 @@ async def upload_tree(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(500, f"Failed to process tree file: {exc}") from exc
+        logger.exception("Failed to process tree file")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/climatic/{file_id}/preview")
@@ -204,7 +211,8 @@ async def preview_climatic(file_id: str):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to preview climatic file: {exc}") from exc
+        logger.exception("Failed to preview climatic file")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/genetic/{file_id}/preview")
@@ -222,4 +230,5 @@ async def preview_genetic(file_id: str):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to preview genetic file: {exc}") from exc
+        logger.exception("Failed to preview genetic file")
+        raise HTTPException(500, "Internal server error") from exc

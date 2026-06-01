@@ -7,6 +7,7 @@ GET  /api/jobs/{result_id}/status   → { status, progress, ... }
 
 import io
 import json
+import logging
 from typing import Literal, Optional
 
 import pandas as pd
@@ -20,6 +21,8 @@ import utils.background_tasks as background_tasks
 from db.db_validator import files_db
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+logger = logging.getLogger(__name__)
 
 
 class JobRequest(BaseModel):
@@ -121,7 +124,8 @@ async def create_job(req: JobRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to create job: {exc}") from exc
+        logger.exception("Failed to create job")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/{result_id}/status")
