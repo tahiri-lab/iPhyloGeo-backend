@@ -7,7 +7,6 @@ GET  /api/jobs/{result_id}/status   → { status, progress, ... }
 
 import io
 import json
-import logging
 from typing import Literal, Optional
 
 import pandas as pd
