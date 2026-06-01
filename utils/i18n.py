@@ -4,9 +4,9 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-LANGUAGE_LIST = ["en", "fr"]
+LANGUAGE_LIST = ["en", "fr", "es"]
 SUPPORTED_LOCALES = LANGUAGE_LIST
-LOCALE_PAGES = ["home", "setting", "upload", "help", "result", "results", "sidebar"]
+LOCALE_PAGES = ["result"]
 LOCALE_DIR_CANDIDATES = ["locales"]
 
 
