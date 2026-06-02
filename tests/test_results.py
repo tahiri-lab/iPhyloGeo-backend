@@ -126,7 +126,7 @@ def test_email_result_success(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
     r = _post_email_request(client, "willbou2@gmail.com", True)
     assert r.status_code == 200
-    assert "sent" in r.json()["message"].lower()
+    assert "queued" in r.json()["message"].lower()
 
 def test_email_result_rate_limit_returns_429(client, results_col, test_redis):
     
@@ -163,8 +163,16 @@ def test_email_result_invalid_domain_returns_400(client, results_col):
     message = r.json()["detail"].lower()
     assert "invalid" in message and "domain" in message
 
-def test_email_result_send_failure_returns_500(client, results_col):
+
+def test_email_result_url_format(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
+    with patch("api.routes.results.mail.send_results_ready_email", return_value=True) as mock_send:
+        r = client.post(
+            f"/api/results/{STR_ID}/email",
+            json={"email": "willbou2@gmail.com", "lang": "en"},
+        )
+    assert r.status_code == 200
+    mock_send.assert_called_once_with("willbou2@gmail.com", f"/result?id={STR_ID}", "en")
     r = _post_email_request(client, "willbou2@gmail.com", False)
     assert r.status_code == 500
 
