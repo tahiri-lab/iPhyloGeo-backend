@@ -173,3 +173,24 @@ def test_email_result_url_format(client, results_col):
         )
     assert r.status_code == 200
     mock_send.assert_called_once_with("willbou2@gmail.com", f"/result?id={STR_ID}", "en")
+    r = _post_email_request(client, "willbou2@gmail.com", False)
+    assert r.status_code == 500
+
+def test_email_result_invalid_lang_returns_422(client, results_col):
+    results_col.find_one.return_value = _make_result_doc()
+    with patch("api.routes.results.mail.send_results_ready_email", return_value=True):
+        r = client.post(
+            f"/api/results/{STR_ID}/email",
+            json={"email": "willbou2@gmail.com", "lang": "de"},
+        )
+    assert r.status_code == 422
+
+def test_email_result_spanish_success(client, results_col):
+    results_col.find_one.return_value = _make_result_doc()
+    with patch("api.routes.results.mail.send_results_ready_email", return_value=True) as mock_send:
+        r = client.post(
+            f"/api/results/{STR_ID}/email",
+            json={"email": "willbou2@gmail.com", "lang": "es"},
+        )
+    assert r.status_code == 200
+    mock_send.assert_called_once_with("willbou2@gmail.com", f"/result/{STR_ID}", "es")

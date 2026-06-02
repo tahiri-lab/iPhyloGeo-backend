@@ -17,6 +17,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from dash import dcc, html
 from scipy.spatial.distance import pdist, squareform
+import magic as magic
 
 COOKIE_NAME = "AUTH"
 COOKIE_MAX_AGE = 8640000  # 100 days
@@ -746,3 +747,27 @@ def get_table_styles():
             },
         ],
     }
+
+def is_file_valid(
+    filename: str,
+    content: bytes,
+    allowed_extensions: list[str],
+    allowed_mimetypes: list[str],
+    max_size_bytes: int
+    ):
+    _, ext = os.path.splitext(filename.lower())
+    ##Translation needed
+    # 1. Vérifier l’extension
+    if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
+        raise ValueError(f"Extension non permise. Extensions acceptées: {allowed_extensions}")
+
+    # 2. Vérifier la taille
+    if len(content) > max_size_bytes:
+        raise ValueError(f"Fichier trop volumineux. Max: {max_size_bytes} bytes")
+
+    # 3. Vérifier le mimetype réel
+    mime = magic.from_buffer(content, mime=True)
+    if mime not in allowed_mimetypes:
+        raise ValueError(f"Mimetype non permis: {mime}. Acceptés: {allowed_mimetypes}")
+
+    return ext
