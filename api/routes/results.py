@@ -8,12 +8,13 @@ GET    /api/results/{id}/download       → Excel file
 POST   /api/results/{id}/email          → send results-ready email
 """
 
+from asyncio.log import logger
 import io
 from typing import Any
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -121,18 +122,18 @@ def rate_limit_emails(request: Request):
         raise HTTPException(429, "Too many requests. You are now temporarily banned.")
     
 @router.post("/{result_id}/email")
-async def email_result(result_id: str, req: EmailRequest, request: Request):
+async def email_result(result_id: str, req: EmailRequest, request: Request, background_task: BackgroundTasks):
     try:
         rate_limit_emails(request)
-        results_url = f"/result/{result_id}"
         error_str = mail.verify_email_address(req.email)
         if error_str is not None:
             raise HTTPException(400, error_str)
-        success = mail.send_results_ready_email(req.email, results_url, req.lang)
-        if not success:
-            raise HTTPException(500, "Failed to send email — check server logs")
-        return {"message": "Email sent successfully"}
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to send email: {exc}") from exc
+        logger.exception("Failed to validate email")
+        raise HTTPException(500, "Internal server error") from exc
+    
+    result_url = f"/result?id={result_id}"
+    background_task.add_task(mail.send_results_ready_email, req.email, result_url, req.lang)
+    return {"message": "Email queued."}
