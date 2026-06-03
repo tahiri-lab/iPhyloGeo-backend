@@ -19,7 +19,7 @@ from Bio.Align import MultipleSeqAlignment
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from utils.utils import format_card_date, to_datetime_utc, _filter_alignment_gaps
+from utils.utils import format_card_date, to_datetime_utc, _filter_alignment_gaps, is_file_valid
 from db.controllers.files import fasta_to_str, str_csv_to_df, df_to_str_csv
 from api.routes.results import _serialize
 from enums import (
@@ -325,3 +325,74 @@ def test_count_climatic_columns_empty_string():
 def test_count_climatic_columns_invalid_json_returns_default():
     result = count_climatic_columns("NOT JSON")
     assert result == 2  # documented fallback
+
+# ── file validator ───────────────────────────────────────────────────────────
+
+def test_valid_csv(tmp_path):
+    file = tmp_path / "test.csv"
+    file.write_text("a,b,c\n1,2,3")
+
+    content = file.read_bytes()
+
+    ext = is_file_valid(
+        filename="test.csv",
+        content=content,
+        allowed_extensions=[".csv"],
+        allowed_mimetypes=["text/csv"],
+        max_size_bytes=1024
+    )
+
+    assert ext == ".csv"
+
+
+def test_invalid_extension(tmp_path):
+    file = tmp_path / "test.txt"
+    file.write_text("hello")
+
+    content = file.read_bytes()
+
+    with pytest.raises(ValueError) as exc:
+        is_file_valid(
+            filename="test.txt",
+            content=content,
+            allowed_extensions=[".csv"],
+            allowed_mimetypes=["text/csv"],
+            max_size_bytes=1024
+        )
+
+    assert "Extension" in str(exc.value)
+
+def test_wrong_mimetype(tmp_path):
+    file = tmp_path / "test.csv"
+    file.write_text("not really a csv")
+
+    content = file.read_bytes()
+
+    # Allowed extension is .csv but mimetype will NOT be text/csv
+    with pytest.raises(ValueError) as exc:
+        is_file_valid(
+            filename="test.csv",
+            content=content,
+            allowed_extensions=[".csv"],
+            allowed_mimetypes=["text/csv"],
+            max_size_bytes=1024
+        )
+
+    assert "Mimetype" in str(exc.value)
+
+def test_file_too_large(tmp_path):
+    file = tmp_path / "big.csv"
+    file.write_text("a" * 5000)  # 5 KB
+
+    content = file.read_bytes()
+
+    with pytest.raises(ValueError) as exc:
+        is_file_valid(
+            filename="big.csv",
+            content=content,
+            allowed_extensions=[".csv"],
+            allowed_mimetypes=["text/csv"],
+            max_size_bytes=1000  # 1 KB limit
+        )
+
+    assert "trop volumineux" in str(exc.value).lower()
