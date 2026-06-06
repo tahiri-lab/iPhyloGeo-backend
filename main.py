@@ -27,13 +27,11 @@ from api.routes.results import router as results_router
 from api.routes.settings import router as settings_router
 
 from utils.sweeper import start_mongodb_sweeper
-import redis_client
-from db.db_validator import results_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     uvicorn_logger = logging.getLogger("uvicorn.error")
-    sweeper_task = asyncio.create_task(start_mongodb_sweeper(results_db.database, redis_client.get_redis(), uvicorn_logger))
+    sweeper_task = asyncio.create_task(start_mongodb_sweeper(uvicorn_logger))
     yield
     sweeper_task.cancel()
 

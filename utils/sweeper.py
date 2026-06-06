@@ -2,14 +2,19 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
-from rq import Queue
-from redis import Redis
+from rq.job import Job
+from db.controllers.results import results_db
+import redis_client
+from rq.exceptions import NoSuchJobError
 
-STALE_TIMEOUT_THRESHOLD = timedelta(hours=2, minutes=30)
-LOOP_INTERVAL_SECONDS = 60 * 10
+# TODO this may not be the exact right thresholds depending on what kind of usage we expect for our app
+SUSPICIOUS_THRESHOLD = timedelta(hours=1, minutes=0)
+STALE_THRESHOLD = timedelta(hours=24, minutes=0)
+LOOP_INTERVAL_SECONDS = 60 * 30 # 30 minutes
 
+redis_connection = redis_client.get_redis()
 
-async def start_mongodb_sweeper(db, redis_connection: Redis, uvicorn_logger=None):
+async def start_mongodb_sweeper(uvicorn_logger=None):
     """
     An infinite loop background task that cleans up stuck pipeline jobs
     by cross-referencing MongoDB and Redis.
@@ -17,23 +22,21 @@ async def start_mongodb_sweeper(db, redis_connection: Redis, uvicorn_logger=None
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    # I WILL GET MY STUPID LOGGING TO SHOW UP HAAAAA
     def log_to_both(level: str, msg: str):
         """Dynamically routes the log message to both local and uvicorn logs if available."""
         getattr(logger, level)(msg)
         if uvicorn_logger:
-            getattr(uvicorn_logger, level)(msg)
+            getattr(uvicorn_logger, level)(f"[Sweeper] {msg}")
     def info(msg: str):     log_to_both("info", msg)
     def warning(msg: str):  log_to_both("warning", msg)
     def error(msg: str):    log_to_both("error", msg)
     def critical(msg: str): log_to_both("critical", msg)
 
-    info("[Sweeper] Background task initialized successfully.")
+    info("Background task initialized successfully.")
 
     while True:
         try:
-            info("[Sweeper] Sweeper run started...")
-            cutoff_time = datetime.now(timezone.utc) - STALE_TIMEOUT_THRESHOLD
+            info("Sweeper run started...")
             active_statuses = [
                 "pending", "running", "queued",
                 "climatic_trees", "alignement", "alignment",
@@ -41,57 +44,63 @@ async def start_mongodb_sweeper(db, redis_connection: Redis, uvicorn_logger=None
             ]
             query = {
                 "status": {"$in": active_statuses},
-                "created_at": {"$lt": cutoff_time},
             }
-            stale_jobs = list(db.results.find(query))
+            stale_jobs = list(results_db.find(query))
 
             if not stale_jobs:
-                info("[Sweeper] Found no orphaned jobs")
+                info("Found no orphaned jobs")
             else:
-                info(f"[Sweeper] Found {len(stale_jobs)} potential orphaned jobs to verify...")
+                info(f"Found {len(stale_jobs)} potential orphaned jobs to verify...")
 
                 for doc in stale_jobs:
                     result_id = str(doc["_id"])
+                    has_been = (datetime.now(timezone.utc)
+                        - doc["created_at"].replace(tzinfo=timezone.utc))
                     is_truly_dead = False
 
                     try:
-                        rq_job = Queue(connection=redis_connection).fetch_job(result_id)
-                        if rq_job is None:
-                            # If it doesn't exist in Redis at all, it's an absolute ghost
-                            warning(f"[Sweeper] Job {result_id} missing from Redis completely. Declaring dead.")
+                        rq_job = Job.fetch(str(result_id), connection=redis_connection)
+                        status = rq_job.get_status()
+
+                        if status in ["failed", "stopped"]:
+                            warning(f"Job {result_id} is marked '{status}' in Redis.")
                             is_truly_dead = True
-                        elif rq_job.get_status() in ["failed", "stopped"]:
-                            # Redis knows it died, but MongoDB never got the memo
-                            warning(f"[Sweeper] Job {result_id} is marked '{rq_job.get_status()}' in Redis. Syncing Mongo.")
+                        elif has_been > STALE_THRESHOLD:
+                            warning(f"Job {result_id} has been running for {has_been} and has exceeded the stale threshold.")
                             is_truly_dead = True
-                        else:
-                            # The job is still safely registered in Redis and processing normally
-                            info(f"[Sweeper] Job {result_id} is still actively tracked by Redis. Standing down.")
+                        elif has_been > SUSPICIOUS_THRESHOLD:
+                            info(f"Job {result_id} has been running for {has_been} and has exceeded the suspicious threshold. Marking as taking a very long time...")
+                            cleanup_update = {
+                                "$set": {
+                                    "is_taking_very_long": True,
+                                }
+                            }
+
+                            results_db.update_one(
+                                {"_id": ObjectId(result_id)}, cleanup_update
+                            )
+
+                    except NoSuchJobError:
+                        warning(f"Job {result_id} missing from Redis completely.")
+                        is_truly_dead = True
 
                     except Exception as redis_err:
-                        error(f"[Sweeper] Error checking Redis for job {result_id}: {redis_err}")
-                        # If we cannot contact Redis, we'll just leave the task be and check later
-                        is_truly_dead = False
+                        error(f"Error checking Redis for job {result_id}: {redis_err}")
 
                     if is_truly_dead:
-                        info(f"[Sweeper] Cleaning up and resetting MongoDB document: {result_id}")
+                        info(f"Updating the status of the result to error: {result_id}")
                         cleanup_update = {
                             "$set": {
                                 "status": "error",
-                                "error_message": "Job automatically terminated: Execution exceeded maximum execution time or worker disconnected unexpectedly.",
-                                "msaSet": None,
-                                "genetic_trees": None,
-                                "climatic_trees": None,
-                                "output": None,
                             }
                         }
 
-                        db.results.update_one(
+                        results_db.update_one(
                             {"_id": ObjectId(result_id)}, cleanup_update
                         )
 
         except Exception as global_err:
-            critical(f"[Sweeper] Critical failure in background loop exception: {global_err}")
+            critical(f"Critical failure in background loop exception: {global_err}")
 
-        info("[Sweeper] Sweeper run finished")
+        info("Sweeper run finished")
         await asyncio.sleep(LOOP_INTERVAL_SECONDS)

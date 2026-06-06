@@ -23,6 +23,9 @@
             pyright
             ruff
 
+            # DB tools
+            mongodb-tools
+
             # DAP (debugging tooling)
             python310Packages.debugpy
           ];

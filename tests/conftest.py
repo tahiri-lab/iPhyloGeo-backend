@@ -93,7 +93,7 @@ from main import app
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 @pytest.fixture
 def test_redis():
-    r = redis.Redis.from_url("redis://localhost:6380", decode_responses=True)
+    r = redis.Redis.from_url("redis://localhost:6380")
     r.flushdb()
     yield r
     r.flushdb()

@@ -14,6 +14,7 @@ import tempfile
 import time
 import warnings
 from pathlib import Path
+import redis_client
 
 import pandas as pd
 from redis import Redis
@@ -48,8 +49,7 @@ SETTINGS_FILE = _PROJECT_ROOT / "genetic_settings_file.json"
 TEMP_DIR = _PROJECT_ROOT / "temp"
 
 # ── Redis / RQ primitives ─────────────────────────────────────────────────────
-_redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-redis_conn = Redis.from_url(_redis_url)
+redis_conn = redis_client.get_redis()
 task_queue = Queue(connection=redis_conn)
 
 # Persistent calibration key (seconds per operation)

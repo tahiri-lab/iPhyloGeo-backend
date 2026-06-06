@@ -1,134 +1,203 @@
 from unittest.mock import MagicMock, patch
 from bson import ObjectId
 from datetime import datetime, timedelta, timezone
+from rq.exceptions import NoSuchJobError
+import asyncio
 
-# Using your exact naming convention and function path
-from utils.sweeper import start_mongodb_sweeper
+from utils.sweeper import (
+    start_mongodb_sweeper,
+    SUSPICIOUS_THRESHOLD,
+    STALE_THRESHOLD,
+)
 
 STALE_RESULT_ID = ObjectId("607f1f77bcf86cd79943900a")
 
-# ── Sweeper Background Loop ──────────────────────────────────────────────────
-def test_sweeper_cleans_up_stale_job_not_in_redis(results_col):
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Missing Redis job → mark error
+# ─────────────────────────────────────────────────────────────────────────────
+def test_sweeper_marks_error_when_job_missing_from_redis(results_col):
     """
-    Scenario: MongoDB shows a job is 'running' and it's older than 2.5 hours.
-    Redis returns None (the job fell out of RAM or worker died completely).
-    Expectation: Sweeper updates status to 'error' and wipes fields.
+    Scenario: Job exceeds stale threshold and is missing in Redis.
+    Expectation: Sweeper marks it as error.
     """
-    results_col.database.results = results_col
-    
-    # Arrange: Force your results_col fixture to return an old orphaned job document
-    stale_time = datetime.now(timezone.utc) - timedelta(hours=3)
-    orphaned_doc = {
+
+    stale_time = datetime.now(timezone.utc) - (STALE_THRESHOLD + timedelta(minutes=1))
+
+    doc = {
         "_id": STALE_RESULT_ID,
         "status": "running",
         "created_at": stale_time,
-        "msaSet": "raw_fasta_alignment_data",
     }
-    results_col.find.return_value = [orphaned_doc]
-    mock_redis_conn = MagicMock()
 
-    # Act: Run the sweeper, patching asyncio.sleep to break the loop instantly
+    results_col.find.return_value = [doc]
+
     with (
-        patch("utils.sweeper.Queue") as mock_queue_cls,
-        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError("Stop Loop")),
+        patch("utils.sweeper.results_db", results_col),
+        patch("utils.sweeper.redis_connection", MagicMock()),
+        patch("utils.sweeper.Job.fetch") as mock_fetch,
+        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError),
     ):
-        # Redis confirms the job is an absolute ghost (None)
-        mock_queue_cls.return_value.fetch_job.return_value = None
+        mock_fetch.side_effect = NoSuchJobError()
 
         try:
-            # We use a dummy wrapper loop to resolve the async coroutine since your suite is sync
-            import asyncio
-
-            asyncio.run(start_mongodb_sweeper(results_col.database, mock_redis_conn))
+            asyncio.run(start_mongodb_sweeper())
         except InterruptedError:
-            pass  # Caught loop-breaker safely
+            pass
 
-    # Assert: Verify the exact $set schema cleanup update ran against your fixture
     results_col.update_one.assert_called_once_with(
         {"_id": STALE_RESULT_ID},
-        {
-            "$set": {
-                "status": "error",
-                "error_message": "Job automatically terminated: Execution exceeded maximum execution time or worker disconnected unexpectedly.",
-                "msaSet": None,
-                "genetic_trees": None,
-                "climatic_trees": None,
-                "output": None,
-            }
-        },
+        {"$set": {"status": "error"}},
     )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Active Redis job → no DB mutation
+# ─────────────────────────────────────────────────────────────────────────────
 def test_sweeper_stands_down_on_active_redis_jobs(results_col):
     """
-    Scenario: MongoDB shows a job is 'alignment' and it's 3 hours old,
-    BUT Redis returns an active job object (heavy tree math is still chugging).
-    Expectation: Sweeper stands down and leaves the DB completely untouched.
+    Scenario: Job exists in Redis and is still running.
+    Expectation: Sweeper does nothing.
     """
-    results_col.database.results = results_col
-    
-    # Arrange
-    stale_time = datetime.now(timezone.utc) - timedelta(hours=3)
-    orphaned_doc = {
+
+    stale_time = datetime.now(timezone.utc) - (
+        SUSPICIOUS_THRESHOLD - timedelta(minutes=1)
+    )
+
+    doc = {
         "_id": STALE_RESULT_ID,
         "status": "alignment",
         "created_at": stale_time,
     }
-    results_col.find.return_value = [orphaned_doc]
-    mock_redis_conn = MagicMock()
 
-    # Act
+    results_col.find.return_value = [doc]
+
     with (
-        patch("utils.sweeper.Queue") as mock_queue_cls,
-        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError("Stop Loop")),
+        patch("utils.sweeper.results_db", results_col),
+        patch("utils.sweeper.redis_connection", MagicMock()),
+        patch("utils.sweeper.Job.fetch") as mock_fetch,
+        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError),
     ):
-        # Mock Redis returning a healthy, active job instance
-        mock_active_job = MagicMock()
-        mock_active_job.get_status.return_value = "started"
-        mock_queue_cls.return_value.fetch_job.return_value = mock_active_job
+        mock_job = MagicMock()
+        mock_job.get_status.return_value = "started"
+        mock_fetch.return_value = mock_job
 
         try:
-            import asyncio
-
-            asyncio.run(start_mongodb_sweeper(results_col.database, mock_redis_conn))
+            asyncio.run(start_mongodb_sweeper())
         except InterruptedError:
             pass
 
-    # Assert: MongoDB collection fixture was NEVER altered
     results_col.update_one.assert_not_called()
 
-def test_sweeper_stands_down_on_redis_connection_error(results_col):
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Stale threshold → force error
+# ─────────────────────────────────────────────────────────────────────────────
+def test_sweeper_marks_error_when_job_exceeds_stale_threshold(results_col):
     """
-    Scenario: MongoDB shows an old job, but checking Redis throws a connection drop error.
-    Expectation: Fail-safe kicks in, is_truly_dead stays False, and Mongo isn't touched.
+    Scenario: Job exceeds stale threshold.
+    Expectation: Sweeper marks error.
     """
-    results_col.database.results = results_col
-    
-    # Arrange
-    stale_time = datetime.now(timezone.utc) - timedelta(hours=3)
-    orphaned_doc = {
+
+    stale_time = datetime.now(timezone.utc) - (STALE_THRESHOLD + timedelta(minutes=1))
+
+    doc = {
         "_id": STALE_RESULT_ID,
         "status": "running",
         "created_at": stale_time,
     }
-    results_col.find.return_value = [orphaned_doc]
-    mock_redis_conn = MagicMock()
 
-    # Act
+    results_col.find.return_value = [doc]
+
     with (
-        patch("utils.sweeper.Queue") as mock_queue_cls,
-        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError("Stop Loop")),
+        patch("utils.sweeper.results_db", results_col),
+        patch("utils.sweeper.redis_connection", MagicMock()),
+        patch("utils.sweeper.Job.fetch") as mock_fetch,
+        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError),
     ):
-        # Simulate Redis choking or disconnecting entirely
-        mock_queue_cls.return_value.fetch_job.side_effect = ConnectionError(
-            "Redis cluster unreachable"
-        )
+        mock_job = MagicMock()
+        mock_job.get_status.return_value = "started"
+        mock_fetch.return_value = mock_job
 
         try:
-            import asyncio
-
-            asyncio.run(start_mongodb_sweeper(results_col.database, mock_redis_conn))
+            asyncio.run(start_mongodb_sweeper())
         except InterruptedError:
             pass
 
-    # Assert: Sweeper safely aborted execution to avoid the split-brain overwrite bug
+    results_col.update_one.assert_called_once()
+    args, _ = results_col.update_one.call_args
+
+    assert args[0]["_id"] == STALE_RESULT_ID
+    assert args[1]["$set"]["status"] == "error"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Suspicious threshold → mark UI flag only
+# ─────────────────────────────────────────────────────────────────────────────
+def test_sweeper_marks_job_as_taking_very_long(results_col):
+    """
+    Scenario: Job exceeds suspicious threshold but not stale threshold.
+    Expectation: Sweeper sets is_taking_very_long = True.
+    """
+
+    created_at = datetime.now(timezone.utc) - (
+        SUSPICIOUS_THRESHOLD + timedelta(minutes=1)
+    )
+
+    doc = {
+        "_id": STALE_RESULT_ID,
+        "status": "running",
+        "created_at": created_at,
+    }
+
+    results_col.find.return_value = [doc]
+
+    with (
+        patch("utils.sweeper.results_db", results_col),
+        patch("utils.sweeper.redis_connection", MagicMock()),
+        patch("utils.sweeper.Job.fetch") as mock_fetch,
+        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError),
+    ):
+        mock_job = MagicMock()
+        mock_job.get_status.return_value = "started"
+        mock_fetch.return_value = mock_job
+
+        try:
+            asyncio.run(start_mongodb_sweeper())
+        except InterruptedError:
+            pass
+
+    results_col.update_one.assert_called_once_with(
+        {"_id": STALE_RESULT_ID},
+        {"$set": {"is_taking_very_long": True}},
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Redis error → fail safe, no DB mutation
+# ─────────────────────────────────────────────────────────────────────────────
+def test_sweeper_does_not_modify_db_on_redis_error(results_col):
+    """
+    Scenario: Redis throws unexpected error during fetch.
+    Expectation: Sweeper does not touch MongoDB.
+    """
+
+    created_at = datetime.now(timezone.utc) - (STALE_THRESHOLD + timedelta(hours=1))
+
+    doc = {
+        "_id": STALE_RESULT_ID,
+        "status": "running",
+        "created_at": created_at,
+    }
+
+    results_col.find.return_value = [doc]
+
+    with (
+        patch("utils.sweeper.results_db", results_col),
+        patch("utils.sweeper.redis_connection", MagicMock()),
+        patch("utils.sweeper.Job.fetch") as mock_fetch,
+        patch("utils.sweeper.asyncio.sleep", side_effect=InterruptedError),
+    ):
+        mock_fetch.side_effect = ConnectionError("Redis down")
+
+        try:
+            asyncio.run(start_mongodb_sweeper())
+        except InterruptedError:
+            pass
+
     results_col.update_one.assert_not_called()
