@@ -13,6 +13,8 @@ from assets.logo_base64 import LOGO_BASE64
 from pathlib import Path
 from dotenv import dotenv_values
 from utils.i18n import t
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 # File-based fallback config (used only when os.environ is not set)
 _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
@@ -54,10 +56,10 @@ def send_email(subject, content, user_email):
         email_session.login(email_user, email_password)
         email_session.sendmail(email_user, user_email, message.as_string())
         email_session.quit()
-        print(f"[Mail] Email sent successfully to {user_email}")
+        logger.info(f"[Mail] Email sent successfully to {user_email}")
         return True
     except Exception as e:
-        print(f"[Mail] Error sending email: {e}")
+        logger.error(f"[Mail] Error sending email: {e}")
         return False
 
 
