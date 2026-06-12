@@ -18,6 +18,8 @@ from Bio.Align import MultipleSeqAlignment
 from dash import dcc, html
 from scipy.spatial.distance import pdist, squareform
 import magic as magic
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 COOKIE_NAME = "AUTH"
 COOKIE_MAX_AGE = 8640000  # 100 days
@@ -222,7 +224,7 @@ def parse_contents(content, file_name, date):
 
         return res
     except Exception as e:
-        print(e)
+        logger.error("Error in parse contents : %s",e)
 
 
 def create_seq_html(file):
@@ -289,7 +291,7 @@ def create_result(
         return results_ctrl.create_result(result)
 
     except Exception as e:
-        print("[Error]:", e)
+        logger.error("[Error in create results]:", e)
         raise Exception("Error creating the result")
 
 
@@ -372,7 +374,7 @@ def create_climatic_trees(
         )
         return climatic_trees
     except Exception as e:
-        print("[Error in create_climatic_trees]:", e)
+        logger.error("[Error in create_climatic_trees]:", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -445,7 +447,7 @@ def create_alignement(result_id, genetic_data, status="alignement"):
 
         return msaSet
     except Exception as e:
-        print("[Error in create_alignement]:", e)
+        logger.error("[Error in create_alignement]:", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -479,7 +481,7 @@ def create_genetic_trees(result_id, msaSet, status="genetic_trees"):
         )
         return genetic_trees
     except Exception as e:
-        print("[Error in create_genetic_trees]:", e)
+        logger.error("[Error in create_genetic_trees]:", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -525,7 +527,7 @@ def create_output(result_id, climatic_trees, genetic_trees, climatic_df):
             if missing:
                 sample = sorted(missing)[:5]
                 sample_str = ", ".join(sample) + (" …" if len(missing) > 5 else "")
-                print(
+                logger.info(
                     f"[Specimen ID mismatch] {len(missing)} genetic leaf/leaves not in "
                     f"climatic data (climatic total: {len(climatic_ids)}). "
                     f"Sample: [{sample_str}]"
@@ -537,7 +539,7 @@ def create_output(result_id, climatic_trees, genetic_trees, climatic_df):
         )
         none_count = sum(1 for row in output_list if row is None)
         if none_count:
-            print(f"[Warning create_output] {none_count} / {len(output_list)} rows from "
+            logger.warning(f"[Warning create_output] {none_count} / {len(output_list)} rows from "
                   f"filterResults were None (specimen ID mismatch) — skipping them.")
         output_list = [row for row in output_list if row is not None]
         output = aphylogeo_utils.format_to_csv(output_list)
@@ -609,7 +611,7 @@ def create_output(result_id, climatic_trees, genetic_trees, climatic_df):
                     df_output = pd.concat([df_output, pd.DataFrame([value_row_data])], ignore_index=True)
 
             except Exception as e:
-                print(f"[Warning] Could not compute statistical tests: {e}")
+                logger.warning(f"[Warning] Could not compute statistical tests: {e}")
 
         # Convert back to dict format for storage
         # Replace NaN with None (or empty string) because MongoDB can be picky or frontend might expect it
@@ -620,7 +622,7 @@ def create_output(result_id, climatic_trees, genetic_trees, climatic_df):
             {"_id": result_id, "output": output, "status": "complete"}
         )
     except Exception as e:
-        print("[Error in create_output]:", e)
+        logger.error("[Error in create_output]:", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
