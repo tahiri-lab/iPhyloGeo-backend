@@ -62,11 +62,28 @@ async def start_mongodb_sweeper(uvicorn_logger=None):
                         rq_job = Job.fetch(str(result_id), connection=redis_connection)
                         status = rq_job.get_status()
 
-                        if status in ["failed", "stopped"]:
+                        if status == "finished":
+                            info(
+                                f"Job {result_id} is finished in Redis; marking result as complete."
+                            )
+                            results_db.update_one(
+                                {"_id": ObjectId(result_id)},
+                                {
+                                    "$set": {
+                                        "status": "complete",
+                                        "is_taking_very_long": False,
+                                    }
+                                },
+                            )
+                            continue
+
+                        if status in ["failed", "stopped", "canceled"]:
                             warning(f"Job {result_id} is marked '{status}' in Redis.")
                             is_truly_dead = True
                         elif has_been > STALE_THRESHOLD:
-                            warning(f"Job {result_id} has been running for {has_been} and has exceeded the stale threshold.")
+                            warning(
+                                f"Job {result_id} has been running for {has_been} and has exceeded the stale threshold."
+                            )
                             is_truly_dead = True
                         elif has_been > SUSPICIOUS_THRESHOLD:
                             info(f"Job {result_id} has been running for {has_been} and has exceeded the suspicious threshold. Marking as taking a very long time...")
