@@ -8,6 +8,9 @@ Start:
 import os
 import warnings
 from pathlib import Path
+import asyncio
+from contextlib import asynccontextmanager
+import logging
 
 warnings.filterwarnings("ignore", message=r"The Bio\.Application modules")
 
@@ -23,7 +26,18 @@ from api.routes.jobs import router as jobs_router
 from api.routes.results import router as results_router
 from api.routes.settings import router as settings_router
 
-app = FastAPI(title="iPhyloGeo API", version="1.0.0")
+from utils.sweeper import start_mongodb_sweeper
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    uvicorn_logger = logging.getLogger("uvicorn.error")
+    sweeper_task = asyncio.create_task(start_mongodb_sweeper(uvicorn_logger))
+    sweeper_task.cancel()
+    try:
+        await sweeper_task
+    except asyncio.CancelledError:
+        pass
+app = FastAPI(title="iPhyloGeo API", version="1.0.0", lifespan=lifespan)
 
 _frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(

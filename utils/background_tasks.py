@@ -14,6 +14,7 @@ import tempfile
 import time
 import warnings
 from pathlib import Path
+import redis_client
 
 import pandas as pd
 from redis import Redis
@@ -48,8 +49,7 @@ SETTINGS_FILE = _PROJECT_ROOT / "genetic_settings_file.json"
 TEMP_DIR = _PROJECT_ROOT / "temp"
 
 # ── Redis / RQ primitives ─────────────────────────────────────────────────────
-_redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-redis_conn = Redis.from_url(_redis_url)
+redis_conn = redis_client.get_redis()
 task_queue = Queue(connection=redis_conn)
 
 # Persistent calibration key (seconds per operation)
@@ -371,13 +371,20 @@ def update_task_status(
     num_operations: int = None,
 ):
     """Update status/progress metadata for the corresponding RQ job."""
+    status_lower = str(status).lower()
+
+    # Let's sync the status in MongoDB to easily recover in case of failure
+    try:
+        results_ctrl.update_result({"_id": result_id, "status": status_lower})
+    except Exception as db_exc:
+        print(f"[Warning] Failed to sync phase status '{status_lower}' to MongoDB: {db_exc}")
+
     job = _resolve_job_for_result(result_id)
     if job is None:
         return
 
     meta = dict(job.meta or {})
 
-    status_lower = str(status).lower()
     meta["status"] = status_lower
     meta["sub_progress"] = None
 
