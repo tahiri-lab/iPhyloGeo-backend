@@ -120,6 +120,9 @@ async def start_mongodb_sweeper(uvicorn_logger=None):
                             {"_id": ObjectId(result_id)}, cleanup_update
                         )
 
+        except asyncio.CancelledError:
+            info("Sweeper task cancelled")
+            raise
         except Exception as global_err:
             critical(f"Critical failure in background loop exception: {global_err}")
 
