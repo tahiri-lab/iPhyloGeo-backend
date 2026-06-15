@@ -32,9 +32,11 @@ from utils.sweeper import start_mongodb_sweeper
 async def lifespan(app: FastAPI):
     uvicorn_logger = logging.getLogger("uvicorn.error")
     sweeper_task = asyncio.create_task(start_mongodb_sweeper(uvicorn_logger))
-    yield
     sweeper_task.cancel()
-
+    try:
+        await sweeper_task
+    except asyncio.CancelledError:
+        pass
 app = FastAPI(title="iPhyloGeo API", version="1.0.0", lifespan=lifespan)
 
 _frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
