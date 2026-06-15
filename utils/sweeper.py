@@ -77,7 +77,11 @@ async def start_mongodb_sweeper(uvicorn_logger=None):
                             }
 
                             results_db.update_one(
-                                {"_id": ObjectId(result_id)}, cleanup_update
+                                {
+                                    "_id": ObjectId(result_id),
+                                    "is_taking_very_long": {"$ne": True},
+                                },
+                                cleanup_update,
                             )
 
                     except NoSuchJobError:
