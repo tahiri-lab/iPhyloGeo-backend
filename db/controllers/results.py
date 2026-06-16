@@ -73,11 +73,11 @@ def get_result(id):
         return temp_results.get_temp_result(id)
 
     res = results_db.find_one({"_id": ObjectId(id)})
-    return res
+    return parse_document(res)
 
 
 def get_all_results():
-    return list(results_db.find())
+    return [parse_document(r) for r in results_db.find().sort("created_at", -1)]
 
 
 def delete_result(id):
@@ -163,7 +163,28 @@ def parse_result(result):
 
 
 def parse_document(document):
-    pass
+    """Convert a MongoDB result document to a JSON-serialisable dict.
+
+    Inverse of parse_result: ObjectIds and datetimes are converted to strings
+    so callers receive a plain dict ready for API serialisation.
+    """
+    if document is None:
+        return None
+    doc = dict(document)
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
+    for field in (
+        "climatic_files_id",
+        "genetic_files_id",
+        "aligned_genetic_files_id",
+        "genetic_tree_files_id",
+    ):
+        if field in doc and doc[field] is not None:
+            doc[field] = str(doc[field])
+    for field in ("created_at", "expired_at"):
+        if field in doc and hasattr(doc[field], "isoformat"):
+            doc[field] = doc[field].isoformat()
+    return doc
 
 
 PENDING_STATUSES = {"pending", "running", "queued", "climatic_trees", "alignement", "alignment", "genetic_trees", "output"}
