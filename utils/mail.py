@@ -1,65 +1,36 @@
 """
-Emai il utility to send notifications to users.
-Shared component used by getStarted.py (pipeline start) and result.py (results view).
+Email utility to send notifications to users.
 """
 
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import sendgrid
+from sendgrid.helpers.mail import Mail
 from email_validator import validate_email, EmailSyntaxError, EmailUndeliverableError
 
 from assets.logo_base64 import LOGO_BASE64
-from pathlib import Path
-from dotenv import dotenv_values
 from utils.i18n import t
 from utils.logger import get_logger
 logger = get_logger(__name__)
 
-# File-based fallback config (used only when os.environ is not set)
-_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-_ENV_CONFIG = dotenv_values(_ENV_PATH)
-
-
-def _get_credentials():
-    """Read credentials at call time so FastAPI's load_dotenv always wins."""
-    user = os.environ.get("EMAIL_USER") or _ENV_CONFIG.get("EMAIL_USER", "iphylogeo@gmail.com")
-    password = os.environ.get("EMAIL_PASSWORD") or _ENV_CONFIG.get("EMAIL_PASSWORD", "")
-    return user, password
-
 
 def send_email(subject, content, user_email):
-    """
-    Send an email using Gmail SMTP.
-
-    Args:
-        subject (str): Email subject
-        content (str): Email content (HTML)
-        user_email (str): Recipient email address
-    """
     try:
-        email_user, email_password = _get_credentials()
-
-        # Create message
-        message = MIMEMultipart("alternative")
-        message["From"] = email_user
-        message["To"] = user_email
-        message["Subject"] = subject
-
-        # HTML body
-        html_content = MIMEText(content, "html", "UTF-8")
-        message.attach(html_content)
-
-        # Connect to SMTP server
-        email_session = smtplib.SMTP("smtp.gmail.com", 587)
-        email_session.starttls()
-        email_session.login(email_user, email_password)
-        email_session.sendmail(email_user, user_email, message.as_string())
-        email_session.quit()
-        logger.info(f"[Mail] Email sent successfully to {user_email}")
+        sg = sendgrid.SendGridAPIClient(api_key=os.environ["SENDGRID_API_KEY"])
+        from_address = os.environ.get("EMAIL_USER", "iphylogeo@gmail.com")
+        print(f"[Mail] Sending from={from_address} to={user_email}")
+        message = Mail(
+            from_email=from_address,
+            to_emails=user_email,
+            subject=subject,
+            html_content=content,
+        )
+        response = sg.send(message)
+        print(f"[Mail] SendGrid response: {response.status_code} {response.body}")
+        print(f"[Mail] Email sent successfully to {user_email}")
         return True
     except Exception as e:
-        logger.error(f"[Mail] Error sending email: {e}")
+        body = getattr(getattr(e, 'body', None), 'decode', lambda: str(e))()
+        print(f"[Mail] Error sending email: {e} | body: {body}")
         return False
 
 
@@ -71,9 +42,9 @@ def get_results_email_template(results_url, lang="en"):
         results_url (str): The URL path to the results (e.g., "/result/123")
     """
     # Ensure full URL if it's relative
-    if not results_url.startswith("http"):
-        frontend_url = os.environ.get("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app")
-        full_url = f"{frontend_url}{results_url}"
+    if not results_url.startswith("https"):
+        frontend_base = os.environ.get("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app")
+        full_url = f"{frontend_base}{results_url}"
     else:
         full_url = results_url
 
@@ -171,7 +142,7 @@ def verify_email_address(user_email):
     Error string or None
     """
     try:
-        validate_email(user_email, check_deliverability=True)
+        validate_email(user_email, check_deliverability=False)
         return None
     except EmailSyntaxError:
         return "The format of the email address is invalid"

@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fasttree \
         clustalw \
         mafft \
+        libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python dependencies ───────────────────────────────────────────────────────
@@ -22,3 +23,6 @@ RUN mkdir -p /app/aphylogeo/bin && \
 # Copied here so the image works standalone. In development the docker-compose
 # volume mount overlays this with the live source for hot-reload.
 COPY . .
+RUN chmod +x start.sh
+
+ENTRYPOINT ["./start.sh"]

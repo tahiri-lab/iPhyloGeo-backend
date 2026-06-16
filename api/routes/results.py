@@ -129,8 +129,8 @@ def rate_limit_emails(request: Request):
         r.setex(ban_key, BAN_TIME, 1)
         raise HTTPException(429, "Too many requests. You are now temporarily banned.")
     
-@router.post("/{result_id}/email")
-async def email_result(result_id: str, req: EmailRequest, request: Request, background_task: BackgroundTasks):
+@router.post("/{result_id}/email", status_code=202)
+async def email_result(result_id: str, req: EmailRequest, request: Request, background_tasks: BackgroundTasks):
     try:
         rate_limit_emails(request)
         error_str = mail.verify_email_address(req.email)
@@ -139,9 +139,8 @@ async def email_result(result_id: str, req: EmailRequest, request: Request, back
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Failed to validate email")
-        raise HTTPException(500, "Internal server error") from exc
-    
-    result_url = f"/result?id={result_id}"
-    background_task.add_task(mail.send_results_ready_email, req.email, result_url, req.lang)
-    return {"message": "Email queued."}
+        raise HTTPException(500, f"Failed to validate email: {exc}") from exc
+
+    results_url = f"/results?id={result_id}"
+    background_tasks.add_task(mail.send_results_ready_email, req.email, results_url, req.lang)
+    return {"message": "Email queued"}
