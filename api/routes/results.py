@@ -39,9 +39,15 @@ def _serialize(obj: Any) -> Any:
 
 
 @router.get("")
-async def list_results():
+async def list_results(limit: int = 50, skip: int = 0):
     try:
-        return [_serialize(r) for r in results_ctrl.get_all_results()]
+        result = results_ctrl.get_all_results(limit=limit, skip=skip)
+        return {
+            "data": [_serialize(r) for r in result["data"]],
+            "total": result["total"],
+            "skip": skip,
+            "limit": limit,
+        }
     except Exception as exc:
         raise HTTPException(500, f"Failed to list results: {exc}") from exc
 
