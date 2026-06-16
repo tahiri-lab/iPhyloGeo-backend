@@ -8,13 +8,16 @@ GET    /api/results/{id}/download       → Excel file
 POST   /api/results/{id}/email          → send results-ready email
 """
 
+from asyncio.log import logger
 import io
+import logging
 from typing import Any
 
 import pandas as pd
 from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from typing import Literal
 from pydantic import BaseModel
 
 import db.controllers.results as results_ctrl
@@ -23,6 +26,8 @@ import utils.mail as mail
 import redis_client
 
 router = APIRouter(prefix="/api/results", tags=["results"])
+
+logger = logging.getLogger(__name__)
 
 
 def _serialize(obj: Any) -> Any:
@@ -49,7 +54,8 @@ async def list_results(limit: int = 50, skip: int = 0):
             "limit": limit,
         }
     except Exception as exc:
-        raise HTTPException(500, f"Failed to list results: {exc}") from exc
+        logger.exception("Failed to list results")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/{result_id}")
@@ -62,7 +68,8 @@ async def get_result(result_id: str):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to get result: {exc}") from exc
+        logger.exception("Failed to get result")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.delete("/{result_id}", status_code=204)
@@ -70,7 +77,8 @@ async def delete_result(result_id: str):
     try:
         results_ctrl.delete_result(result_id)
     except Exception as exc:
-        raise HTTPException(500, f"Failed to delete result: {exc}") from exc
+        logger.exception("Failed to delete result")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/{result_id}/download")
@@ -98,12 +106,13 @@ async def download_result(result_id: str):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to download result: {exc}") from exc
+        logger.exception("Failed to download result")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 class EmailRequest(BaseModel):
     email: str
-    lang: str = "en"
+    lang: Literal["en", "fr", "es"] = "en"
 
 def rate_limit_emails(request: Request):
     WINDOW = 60  # 1 minute

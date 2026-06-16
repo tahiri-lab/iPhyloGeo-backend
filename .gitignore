@@ -9,6 +9,5 @@ build/
 aphylogeo/
 
 # Nix stuff
-flake.lock
 .envrc
 .direnv/

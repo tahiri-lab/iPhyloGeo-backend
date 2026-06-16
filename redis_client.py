@@ -8,5 +8,5 @@ _r = None
 def get_redis():
     global _r
     if _r is None:
-        _r = redis.Redis.from_url(redis_url, decode_responses=True)
+        _r = redis.Redis.from_url(redis_url)
     return _r
