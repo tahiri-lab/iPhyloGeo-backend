@@ -9,8 +9,6 @@ from email_validator import validate_email, EmailSyntaxError, EmailUndeliverable
 
 from assets.logo_base64 import LOGO_BASE64
 from utils.i18n import t
-from utils.logger import get_logger
-logger = get_logger(__name__)
 
 
 def send_email(subject, content, user_email):
