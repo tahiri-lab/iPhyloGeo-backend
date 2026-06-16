@@ -14,6 +14,7 @@ import tempfile
 import time
 import warnings
 from pathlib import Path
+import redis_client
 
 import pandas as pd
 from redis import Redis
@@ -28,6 +29,8 @@ import utils.utils as utils
 from aphylogeo.genetic_trees import GeneticTrees
 from aphylogeo.params import Params
 from enums import convert_settings_to_codes
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 try:
     import psutil
@@ -48,8 +51,7 @@ SETTINGS_FILE = _PROJECT_ROOT / "genetic_settings_file.json"
 TEMP_DIR = _PROJECT_ROOT / "temp"
 
 # ── Redis / RQ primitives ─────────────────────────────────────────────────────
-_redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-redis_conn = Redis.from_url(_redis_url)
+redis_conn = redis_client.get_redis()
 task_queue = Queue(connection=redis_conn)
 
 # Persistent calibration key (seconds per operation)
@@ -186,12 +188,12 @@ def count_sequences(genetic_file) -> int:
 
     if isinstance(genetic_file, dict):
         num_sequences = len(genetic_file)
-        print(f"[count_sequences] Dict with {num_sequences} sequences (keys)")
+        logger.info(f"[count_sequences] Dict with {num_sequences} sequences (keys)")
 
         if num_sequences > 0:
             first_key = list(genetic_file.keys())[0]
             first_value = genetic_file[first_key]
-            print(
+            logger.info(
                 f"[count_sequences] Example: '{first_key}' -> {len(str(first_value))} chars"
             )
 
@@ -199,10 +201,10 @@ def count_sequences(genetic_file) -> int:
 
     if isinstance(genetic_file, str):
         count = genetic_file.count(">")
-        print(f"[count_sequences] String with {count} '>' characters")
+        logger.info(f"[count_sequences] String with {count} '>' characters")
         return count if count > 0 else 1
 
-    print(f"[count_sequences] Unknown type: {type(genetic_file)}, returning 1")
+    logger.info(f"[count_sequences] Unknown type: {type(genetic_file)}, returning 1")
     return 1
 
 
@@ -246,8 +248,8 @@ def estimate_processing_time(
 
         estimated_time += sequence_time + alignment_time
 
-        print(f"[Time Estimation] Pairwise: {num_sequences} seq -> {num_operations} ops")
-        print(
+        logger.info(f"[Time Estimation] Pairwise: {num_sequences} seq -> {num_operations} ops")
+        logger.info(
             f"[Time Estimation] Breakdown: ops={num_operations} x {time_per_operation:.3f}s "
             f"= {sequence_time:.1f}s + alignment={alignment_time:.1f}s"
         )
@@ -258,11 +260,11 @@ def estimate_processing_time(
     climatic_time = num_climatic_cols * TIME_PER_CLIMATIC_COLUMN
     estimated_time += climatic_time
 
-    print(f"[Time Estimation] Available RAM: {available_ram:.2f} GB / {total_ram:.2f} GB")
-    print(
+    logger.info(f"[Time Estimation] Available RAM: {available_ram:.2f} GB / {total_ram:.2f} GB")
+    logger.info(
         f"[Time Estimation] Sequences: {num_sequences}, Climatic columns: {num_climatic_cols}"
     )
-    print(
+    logger.info(
         f"[Time Estimation] Total estimated time: {estimated_time:.1f} seconds "
         f"({estimated_time / 60:.1f} minutes)"
     )
@@ -371,13 +373,20 @@ def update_task_status(
     num_operations: int = None,
 ):
     """Update status/progress metadata for the corresponding RQ job."""
+    status_lower = str(status).lower()
+
+    # Let's sync the status in MongoDB to easily recover in case of failure
+    try:
+        results_ctrl.update_result({"_id": result_id, "status": status_lower})
+    except Exception as db_exc:
+        print(f"[Warning] Failed to sync phase status '{status_lower}' to MongoDB: {db_exc}")
+
     job = _resolve_job_for_result(result_id)
     if job is None:
         return
 
     meta = dict(job.meta or {})
 
-    status_lower = str(status).lower()
     meta["status"] = status_lower
     meta["sub_progress"] = None
 
@@ -409,7 +418,7 @@ def update_task_status(
                 else:
                     new_calibrated = (calibrated * 0.60) + (observed_time_per_op * 0.40)
                 _set_calibrated_time_per_operation(new_calibrated)
-                print(
+                logger.info(
                     "[Time Estimation] Calibrated time/op updated to "
                     f"{new_calibrated:.3f}s (observed {observed_time_per_op:.3f}s)"
                 )
@@ -465,7 +474,7 @@ def _recalculate_estimate(job: Job, done: int, total: int):
         meta["mp_step_total"] = total
         meta["mp_step_count"] = int(meta.get("mp_step_count", 0)) + 1
         meta["mp_prev_total"] = total
-        print(f"[Progress] Step {meta['mp_step_count'] + 1} started (N={total})")
+        logger.info(f"[Progress] Step {meta['mp_step_count'] + 1} started (N={total})")
 
     step_elapsed = now - float(meta["mp_step_start"])
     rate = 0.0
@@ -500,7 +509,7 @@ def _recalculate_estimate(job: Job, done: int, total: int):
     meta["elapsed_time"] = total_elapsed
     meta["sub_progress"] = max(0, min(100, round(done / total * 100)))
 
-    print(
+    logger.info(
         f"[Progress] Step {steps_done + 1}/{total_steps}  {done}/{total}  "
         f"rate={rate:.3f} ops/s  remaining_current={remaining_current:.1f}s  "
         f"avg_step={avg_step_time:.1f}s  future_steps={steps_remaining_after_current}  "
@@ -527,7 +536,7 @@ def record_step_elapsed(result_id: str, elapsed_seconds: float):
     completed.append(float(elapsed_seconds))
     meta["mp_completed"] = completed
 
-    print(
+    logger.info(
         f"[Progress] Step completed in {elapsed_seconds:.1f}s "
         f"({len(completed)} steps done)"
     )
@@ -603,14 +612,14 @@ def run_pipeline_async(
     """
     Enqueue the phylogeo pipeline in RQ.
     """
-    print(f"[Pipeline] Starting run_pipeline_async for result_id: {result_id}")
+    logger.info(f"[Pipeline] Starting run_pipeline_async for result_id: {result_id}")
 
-    print("[Pipeline] Estimating processing time...")
+    logger.info("[Pipeline] Estimating processing time...")
     _, num_operations = _count_pairwise_operations(genetic_file, aligned_genetic_file)
     estimated_time = estimate_processing_time(
         climatic_file, genetic_file, aligned_genetic_file, genetic_tree_file
     )
-    print(f"[Pipeline] Estimated time: {estimated_time:.1f}s")
+    logger.info(f"[Pipeline] Estimated time: {estimated_time:.1f}s")
 
     if genetic_file is not None:
         pipeline_mode = "genetic"
@@ -653,7 +662,7 @@ def run_pipeline_async(
     )
     job.save_meta()
 
-    print(f"[Pipeline] Task enqueued successfully for result_id: {result_id}")
+    logger.info(f"[Pipeline] Task enqueued successfully for result_id: {result_id}")
     return result_id
 
 
@@ -680,7 +689,7 @@ def run_pipeline_task(
     """
     RQ worker function that executes the phylogeo pipeline.
     """
-    print(f"[Pipeline Task] Starting run_pipeline_task for result_id: {result_id}")
+    logger.info(f"[Pipeline Task] Starting run_pipeline_task for result_id: {result_id}")
 
     temp_fasta_path = None
     try:
@@ -699,7 +708,7 @@ def run_pipeline_task(
                 pass
 
         # Re-read latest settings from JSON and apply to Params
-        print(f"[Pipeline Task] Loading settings from {SETTINGS_FILE}...")
+        logger.info(f"[Pipeline Task] Loading settings from {SETTINGS_FILE}...")
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
                 latest_settings = json.load(settings_file)
@@ -707,18 +716,18 @@ def run_pipeline_task(
             Params.update_from_dict(
                 {k: v for k, v in latest_codes.items() if k in Params.PARAMETER_KEYS}
             )
-            print("[Pipeline Task] Settings loaded successfully")
+            logger.info("[Pipeline Task] Settings loaded successfully")
         except Exception as e:
-            print(f"[Warning] Could not reload settings: {e}")
+            logger.info(f"[Warning] Could not reload settings: {e}")
 
         # Prepare climatic trees
-        print("[Pipeline Task] Creating climatic trees...")
+        logger.info("[Pipeline Task] Creating climatic trees...")
         selected_columns = params_climatic.get("names") if params_climatic else None
         climatic_trees = utils.create_climatic_trees(
             result_id, climatic_file, selected_columns
         )
         update_task_status(result_id, "climatic_trees")
-        print("[Pipeline Task] Climatic trees created successfully")
+        logger.info("[Pipeline Task] Climatic trees created successfully")
 
         genetic_trees = None
 
@@ -806,12 +815,12 @@ def run_pipeline_task(
                 results_url = f"/results?id={result_id}"
                 mail.send_results_ready_email(email, results_url, lang)
             except Exception as e:
-                print(f"[Warning] Could not send email: {e}")
+                logger.warning(f"[Warning] Could not send email: {e}")
 
         return result_id
 
     except Exception as e:
-        print(f"[Error in background pipeline]: {e}")
+        logger.error(f"[Error in background pipeline]: {e}")
         update_task_status(result_id, "error", error=str(e))
         results_ctrl.update_result({"_id": result_id, "status": "error"})
         raise

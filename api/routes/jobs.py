@@ -7,7 +7,8 @@ GET  /api/jobs/{result_id}/status   → { status, progress, ... }
 
 import io
 import json
-from typing import Optional
+import logging
+from typing import Literal, Optional
 
 import pandas as pd
 from bson import ObjectId
@@ -21,6 +22,8 @@ from db.db_validator import files_db
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
+logger = logging.getLogger(__name__)
+
 
 class JobRequest(BaseModel):
     climatic_file_id: str
@@ -31,7 +34,7 @@ class JobRequest(BaseModel):
     genetic_params: Optional[dict] = None
     name: str = "result"
     email: Optional[str] = None
-    lang: str = "en"
+    lang: Literal["en", "fr", "es"] = "en"
     temporary: bool = False
 
 
@@ -113,7 +116,7 @@ async def create_job(req: JobRequest):
             genetic_tree_file=genetic_tree_file,
             params_climatic=req.climatic_params,
             email=req.email,
-            lang=req.lang if req.lang in ("en", "fr") else "en",
+            lang=req.lang,
         )
 
         return {"result_id": str(result_id)}
@@ -121,7 +124,8 @@ async def create_job(req: JobRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to create job: {exc}") from exc
+        logger.exception("Failed to create job")
+        raise HTTPException(500, "Internal server error") from exc
 
 
 @router.get("/{result_id}/status")

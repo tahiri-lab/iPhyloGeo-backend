@@ -25,6 +25,9 @@ schema_results = {
                     "error",
                 ],
             },
+            "is_taking_very_long": {
+                "bsonType": "bool",
+            },
             "result_type": {
                 "bsonType": "array",
                 "items": {
