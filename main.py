@@ -8,6 +8,9 @@ Start:
 import os
 import warnings
 from pathlib import Path
+import asyncio
+from contextlib import asynccontextmanager
+import logging
 
 warnings.filterwarnings("ignore", message=r"The Bio\.Application modules")
 
@@ -23,7 +26,7 @@ from api.routes.jobs import router as jobs_router
 from api.routes.results import router as results_router
 from api.routes.settings import router as settings_router
 
-app = FastAPI(title="iPhyloGeo API", version="1.0.0")
+from utils.sweeper import start_mongodb_sweeper
 
 _frontend_url = os.getenv("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app")
 app.add_middleware(

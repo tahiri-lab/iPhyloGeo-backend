@@ -37,7 +37,7 @@ class _NoopDeathPenalty:
 
 
 if __name__ == "__main__":
-    r = Redis.from_url(redis_client.redis_url)
+    r = redis_client.get_redis()
 
     queues = [Queue(connection=r)]
 

@@ -51,7 +51,7 @@ def get_results_email_template(results_url, lang="en"):
     view_prompt = t("result.email-template.view-prompt", lang)
     button_text = t("result.email-template.button", lang)
 
-    html_lang = "fr" if lang == "fr" else "en"
+    html_lang = lang if lang in ("fr", "es") else "en"
 
     return f"""
 <!DOCTYPE html>
