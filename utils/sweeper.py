@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from rq.job import Job
+from rq import Worker
 from db.controllers.results import results_db
 import redis_client
 from rq.exceptions import NoSuchJobError
@@ -52,6 +53,8 @@ async def start_mongodb_sweeper(uvicorn_logger=None):
             else:
                 info(f"Found {len(stale_jobs)} potential orphaned jobs to verify...")
 
+                workers = Worker.all(connection=redis_connection)
+                print(workers)
                 for doc in stale_jobs:
                     result_id = str(doc["_id"])
                     has_been = (datetime.now(timezone.utc)
@@ -77,7 +80,14 @@ async def start_mongodb_sweeper(uvicorn_logger=None):
                             )
                             continue
 
-                        if status in ["failed", "stopped", "canceled"]:
+                        if (
+                            status == "started"
+                            and str(doc["status"]) not in ["pending", "queued"]
+                            and not any(w.name == rq_job.worker_name for w in workers)
+                        ):
+                            warning(f"Job {result_id} is marked 'started' in Redis and the result has some work done, but there is no worker.")
+                            is_truly_dead = True
+                        elif status in ["failed", "stopped", "canceled"]:
                             warning(f"Job {result_id} is marked '{status}' in Redis.")
                             is_truly_dead = True
                         elif has_been > STALE_THRESHOLD:

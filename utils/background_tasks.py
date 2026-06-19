@@ -668,12 +668,16 @@ def run_pipeline_async(
 
 def _write_genetic_temp_fasta(path: str, genetic_file):
     """Write genetic input to a FASTA temp file used by downstream params."""
-    with open(path, "w", encoding="utf-8") as handle:
-        if isinstance(genetic_file, dict):
-            for seq_name, sequence in genetic_file.items():
-                handle.write(f">{seq_name}\n{sequence}\n")
-        elif isinstance(genetic_file, str):
-            handle.write(genetic_file)
+    oldmask = os.umask(0o600) # that means only the current user has rw access
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            if isinstance(genetic_file, dict):
+                for seq_name, sequence in genetic_file.items():
+                    handle.write(f">{seq_name}\n{sequence}\n")
+            elif isinstance(genetic_file, str):
+                handle.write(genetic_file)
+    finally:
+        os.umask(oldmask)
 
 
 def run_pipeline_task(

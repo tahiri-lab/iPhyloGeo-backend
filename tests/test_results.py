@@ -18,11 +18,29 @@ import redis
 FAKE_RESULT_ID = ObjectId("507f1f77bcf86cd799439012")
 STR_ID = str(FAKE_RESULT_ID)
 
+class FakeCursor:
+    def __init__(self, items):
+        self.items = list(items)
+    def sort(self, field, direction):
+        self.items.sort(
+            key=lambda x: x.get(field),
+            reverse=direction == -1,
+        )
+        return self
+    def skip(self, n):
+        self.items = self.items[n:]
+        return self
+    def limit(self, n):
+        self.items = self.items[:n]
+        return self
+    def __iter__(self):
+        return iter(self.items)
 
 def _make_result_doc(status="complete", with_output=True):
     doc = {
         "_id": FAKE_RESULT_ID,
         "name": "test_result",
+        "created_at": 1,
         "status": status,
         "result_type": ["climatic", "genetic"],
     }
@@ -30,35 +48,79 @@ def _make_result_doc(status="complete", with_output=True):
         doc["output"] = {"Gene": ["geneA", "geneB"], "Bootstrap": [90, 85]}
     return doc
 
+def _make_other_result_doc(created_at=2):
+    doc = _make_result_doc()
+    doc["_id"] = ObjectId("507f1f77bcf86cd799439099")
+    doc["name"] = "second"
+    doc["created_at"] = created_at
+    return doc
 
 # ── List results ───────────────────────────────────────────────────────────────
 
 
 def test_list_results_empty(client, results_col):
-    results_col.find.return_value = iter([])
-    r = client.get("/api/results")
+    results_col.find.return_value = FakeCursor([])
+    results_col.count_documents.return_value = 0
+    r = client.get("/api/results?limit=49&skip=0")
     assert r.status_code == 200
-    assert r.json() == []
+    assert r.json() == {
+        "data": [],
+        "total": 0,
+        "skip": 0,
+        "limit": 49,
+    }
 
 
 def test_list_results_returns_serialised_docs(client, results_col):
-    results_col.find.return_value = iter([_make_result_doc()])
-    r = client.get("/api/results")
+    results_col.find.return_value = FakeCursor([_make_result_doc()])
+    results_col.count_documents.return_value = 1
+    r = client.get("/api/results?limit=30&skip=0")
     assert r.status_code == 200
     results = r.json()
-    assert len(results) == 1
-    assert isinstance(results[0]["_id"], str)
-    assert results[0]["name"] == "test_result"
+    data = results["data"]
+    assert results["total"] == 1
+    assert results["skip"] == 0
+    assert results["limit"] == 30
+    assert len(data) == 1
+    assert isinstance(data[0]["_id"], str)
+    assert data[0]["name"] == "test_result"
 
 
 def test_list_results_multiple_docs(client, results_col):
-    doc2 = _make_result_doc()
-    doc2["_id"] = ObjectId("507f1f77bcf86cd799439099")
-    doc2["name"] = "second"
-    results_col.find.return_value = iter([_make_result_doc(), doc2])
-    r = client.get("/api/results")
+    results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
+    results_col.count_documents.return_value = 2
+    r = client.get("/api/results?limit=45&skip=0")
+    results = r.json()
+    data = results["data"]
+    assert results["total"] == 2
+    assert results["skip"] == 0
+    assert results["limit"] == 45
     assert r.status_code == 200
-    assert len(r.json()) == 2
+    assert len(data) == 2
+
+def test_list_results_multiple_docs_skip(client, results_col):
+    results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
+    results_col.count_documents.return_value = 2
+    r = client.get("/api/results?limit=45&skip=1")
+    results = r.json()
+    data = results["data"]
+    assert results["total"] == 1
+    assert results["skip"] == 1
+    assert results["limit"] == 45
+    assert r.status_code == 200
+    assert len(data) == 1
+
+def test_list_results_multiple_docs_limit(client, results_col):
+    results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
+    results_col.count_documents.return_value = 2
+    r = client.get("/api/results?limit=1&skip=0")
+    results = r.json()
+    data = results["data"]
+    assert results["total"] == 1
+    assert results["skip"] == 0
+    assert results["limit"] == 1
+    assert r.status_code == 200
+    assert len(data) == 1
 
 
 # ── Get single result ──────────────────────────────────────────────────────────
@@ -125,7 +187,7 @@ def _post_email_request(client, email_address, returns: bool):
 def test_email_result_success(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
     r = _post_email_request(client, "willbou2@gmail.com", True)
-    assert r.status_code == 200
+    assert r.status_code == 202
     assert "queued" in r.json()["message"].lower()
 
 def test_email_result_rate_limit_returns_429(client, results_col, test_redis):
@@ -136,7 +198,7 @@ def test_email_result_rate_limit_returns_429(client, results_col, test_redis):
         results_col.find_one.return_value = _make_result_doc()
         for _ in range(10):
             r = _post_email_request(client, "willbou2@gmail.com", True)
-            assert r.status_code == 200
+            assert r.status_code == 202
 
         for _ in range(2):
             r = _post_email_request(client, "willbou2@gmail.com", True)
@@ -147,7 +209,7 @@ def test_email_result_rate_limit_returns_429(client, results_col, test_redis):
         test_redis.flushdb()
         for _ in range(10):
             r = _post_email_request(client, "willbou2@gmail.com", True)
-            assert r.status_code == 200
+            assert r.status_code == 202
 
 def test_email_result_bad_formatting_returns_400(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
@@ -171,10 +233,8 @@ def test_email_result_url_format(client, results_col):
             f"/api/results/{STR_ID}/email",
             json={"email": "willbou2@gmail.com", "lang": "en"},
         )
-    assert r.status_code == 200
-    mock_send.assert_called_once_with("willbou2@gmail.com", f"/result?id={STR_ID}", "en")
-    r = _post_email_request(client, "willbou2@gmail.com", False)
-    assert r.status_code == 500
+    assert r.status_code == 202
+    mock_send.assert_called_once_with("willbou2@gmail.com", f"/results?id={STR_ID}", "en")
 
 def test_email_result_invalid_lang_returns_422(client, results_col):
     results_col.find_one.return_value = _make_result_doc()
@@ -192,5 +252,5 @@ def test_email_result_spanish_success(client, results_col):
             f"/api/results/{STR_ID}/email",
             json={"email": "willbou2@gmail.com", "lang": "es"},
         )
-    assert r.status_code == 200
-    mock_send.assert_called_once_with("willbou2@gmail.com", f"/result/{STR_ID}", "es")
+    assert r.status_code == 202
+    mock_send.assert_called_once_with("willbou2@gmail.com", f"/results?id={STR_ID}", "es")

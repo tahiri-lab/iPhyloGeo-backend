@@ -334,11 +334,12 @@ def test_valid_csv(tmp_path):
 
     content = file.read_bytes()
 
+    # Note that text/plain is what magic actually detects for the mime type of a CSV content
     ext = is_file_valid(
         filename="test.csv",
         content=content,
         allowed_extensions=[".csv"],
-        allowed_mimetypes=["text/csv"],
+        allowed_mimetypes=["text/csv", "text/plain"],
         max_size_bytes=1024
     )
 

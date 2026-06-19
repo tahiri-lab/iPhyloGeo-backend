@@ -77,12 +77,11 @@ def get_result(id):
 
 
 def get_all_results(limit: int = 50, skip: int = 0):
-    total = results_db.count_documents({})
     data = [
         parse_document(r)
         for r in results_db.find().sort("created_at", -1).skip(skip).limit(limit)
     ]
-    return {"data": data, "total": total}
+    return {"data": data, "total": len(data)}
 
 
 def delete_result(id):

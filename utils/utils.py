@@ -7,6 +7,7 @@ from importlib import import_module
 
 import numpy as np
 
+from api.routes.settings import SETTINGS_FILE
 import db.controllers.files as files_ctrl
 import db.controllers.results as results_ctrl
 import pandas as pd
@@ -339,7 +340,7 @@ def create_climatic_trees(
 
         # Remove highly correlated columns (Spearman) — independent of variance preprocessing
         # correlation_threshold_climatic is an iPhyloGeo-specific setting, not in aphylogeo's Params
-        _settings = json.load(open("genetic_settings_file.json", "r"))
+        _settings = json.load(open(SETTINGS_FILE, "r"))
         if _settings.get("correlation_climatic_enabled", "0") == "Enabled":
             max_corr_threshold = float(_settings.get("correlation_threshold_climatic", 0.9))
             feature_cols = list(df.columns[1:])
@@ -758,16 +759,16 @@ def is_file_valid(
     max_size_bytes: int
     ):
     _, ext = os.path.splitext(filename.lower())
-    ##Translation needed
-    # 1. Vérifier l’extension
+
+    # 1. Verify file extension
     if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
         raise ValueError(f"Extension non permise. Extensions acceptées: {allowed_extensions}")
 
-    # 2. Vérifier la taille
+    # 2. Verify file size
     if len(content) > max_size_bytes:
         raise ValueError(f"Fichier trop volumineux. Max: {max_size_bytes} bytes")
 
-    # 3. Vérifier le mimetype réel
+    # 3. Verify the reported mimetype
     mime = magic.from_buffer(content, mime=True)
     if mime not in allowed_mimetypes:
         raise ValueError(f"Mimetype non permis: {mime}. Acceptés: {allowed_mimetypes}")

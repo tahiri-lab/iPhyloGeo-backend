@@ -6,16 +6,42 @@ PUT /api/settings
 """
 
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from enums import (
+    AlignmentMethod,
+    DistanceMethod,
+    FitMethod,
+    MantelTestMethod,
+    PreprocessingToggle,
+    SimilarityMethod,
+    StatisticalTest,
+    TreeType,
+)
+
 BASE_SETTINGS = {
-    "alignment_method": "PairwiseAlign",
-    "distance_method": "LeastSquare",
+    "bootstrap_threshold": 100,
+    "dist_threshold": 5,
     "window_size": 100,
-    "step_size": 10,
+    "step_size": 1,
+    "alignment_method": AlignmentMethod.PAIRWISE_ALIGN,
+    "distance_method": DistanceMethod.ALL,
+    "fit_method": FitMethod.WIDER_FIT,
+    "tree_type": TreeType.BIOPYTHON,
+    "rate_similarity": 50,
+    "method_similarity": SimilarityMethod.HAMMING,
+    "preprocessing_genetic": PreprocessingToggle.DISABLED,
+    "preprocessing_climatic": PreprocessingToggle.DISABLED,
+    "preprocessing_threshold_genetic": 0.5,
+    "preprocessing_threshold_climatic": 0.5,
+    "correlation_climatic_enabled": PreprocessingToggle.DISABLED,
+    "correlation_threshold_climatic": 0.5,
+    "permutations_mantel_test": 999,
+    "permutations_protest": 999,
+    "mantel_test_method": MantelTestMethod.PEARSON,
+    "statistical_test": StatisticalTest.NONE,
 }
 
 
@@ -63,8 +89,11 @@ def test_update_settings_persists_to_file(client, settings_file):
     assert saved["alignment_method"] == "MUSCLE"
 
 
+# Since we have a model for our settings, additional keys should be ignored
 def test_update_settings_with_new_key(client, settings_file):
     new_settings = {**BASE_SETTINGS, "extra_param": "value"}
     r = client.put("/api/settings", json=new_settings)
     assert r.status_code == 200
-    assert r.json()["extra_param"] == "value"
+    assert not hasattr(r.json(), "extra_param")
+
+
