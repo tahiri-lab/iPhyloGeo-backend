@@ -292,7 +292,7 @@ def create_result(
         return results_ctrl.create_result(result)
 
     except Exception as e:
-        logger.error("[Error in create results]:", e)
+        logger.error("[Error in create results]: %s", e)
         raise Exception("Error creating the result")
 
 
@@ -375,7 +375,7 @@ def create_climatic_trees(
         )
         return climatic_trees
     except Exception as e:
-        logger.error("[Error in create_climatic_trees]:", e)
+        logger.error("[Error in create_climatic_trees]: %s", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -448,7 +448,7 @@ def create_alignement(result_id, genetic_data, status="alignement"):
 
         return msaSet
     except Exception as e:
-        logger.error("[Error in create_alignement]:", e)
+        logger.error("[Error in create_alignement]: %s", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -482,7 +482,7 @@ def create_genetic_trees(result_id, msaSet, status="genetic_trees"):
         )
         return genetic_trees
     except Exception as e:
-        logger.error("[Error in create_genetic_trees]:", e)
+        logger.error("[Error in create_genetic_trees]: %s", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,
@@ -623,7 +623,7 @@ def create_output(result_id, climatic_trees, genetic_trees, climatic_df):
             {"_id": result_id, "output": output, "status": "complete"}
         )
     except Exception as e:
-        logger.error("[Error in create_output]:", e)
+        logger.error("[Error in create_output]: %s", e)
         results_ctrl.update_result(
             {
                 "_id": result_id,

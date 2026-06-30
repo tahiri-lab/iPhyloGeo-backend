@@ -713,6 +713,7 @@ def run_pipeline_task(
 
         # Re-read latest settings from JSON and apply to Params
         logger.info(f"[Pipeline Task] Loading settings from {SETTINGS_FILE}...")
+        latest_settings = None
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as settings_file:
                 latest_settings = json.load(settings_file)
@@ -723,6 +724,9 @@ def run_pipeline_task(
             logger.info("[Pipeline Task] Settings loaded successfully")
         except Exception as e:
             logger.info(f"[Warning] Could not reload settings: {e}")
+
+        if latest_settings is not None:
+            results_ctrl.update_result({"_id": result_id, "settings": latest_settings})
 
         # Prepare climatic trees
         logger.info("[Pipeline Task] Creating climatic trees...")
