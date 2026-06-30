@@ -14,7 +14,7 @@ from typing import Any
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from typing import Literal
 from pydantic import BaseModel
@@ -44,11 +44,12 @@ def _serialize(obj: Any) -> Any:
 
 
 @router.get("")
-async def list_results(request: Request, limit: int = 50, skip: int = 0):
+async def list_results(request: Request, limit: int = 50, skip: int = 0, ids: str = Query("")):
     try:
-        auth_cookie = request.cookies.get(COOKIE_NAME)
-        ids = [id for id in (auth_cookie or "").split(".") if id]
-        result = results_ctrl.get_all_results(ids=ids, limit=limit, skip=skip)
+        cookie_ids = [i for i in (request.cookies.get(COOKIE_NAME) or "").split(".") if i]
+        param_ids = [i for i in ids.split(",") if i]
+        all_ids = list(dict.fromkeys(cookie_ids + param_ids))
+        result = results_ctrl.get_all_results(ids=all_ids, limit=limit, skip=skip)
         return {
             "data": [_serialize(r) for r in result["data"]],
             "total": result["total"],
