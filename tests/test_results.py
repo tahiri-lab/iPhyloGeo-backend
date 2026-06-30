@@ -17,6 +17,8 @@ import redis
 
 FAKE_RESULT_ID = ObjectId("507f1f77bcf86cd799439012")
 STR_ID = str(FAKE_RESULT_ID)
+OTHER_FAKE_ID = ObjectId("507f1f77bcf86cd799439099")
+OTHER_STR_ID = str(OTHER_FAKE_ID)
 
 class FakeCursor:
     def __init__(self, items):
@@ -59,8 +61,7 @@ def _make_other_result_doc(created_at=2):
 
 
 def test_list_results_empty(client, results_col):
-    results_col.find.return_value = FakeCursor([])
-    results_col.count_documents.return_value = 0
+    # No AUTH cookie → no IDs → short-circuit before querying DB
     r = client.get("/api/results?limit=49&skip=0")
     assert r.status_code == 200
     assert r.json() == {
@@ -74,7 +75,7 @@ def test_list_results_empty(client, results_col):
 def test_list_results_returns_serialised_docs(client, results_col):
     results_col.find.return_value = FakeCursor([_make_result_doc()])
     results_col.count_documents.return_value = 1
-    r = client.get("/api/results?limit=30&skip=0")
+    r = client.get("/api/results?limit=30&skip=0", cookies={"AUTH": STR_ID})
     assert r.status_code == 200
     results = r.json()
     data = results["data"]
@@ -89,7 +90,7 @@ def test_list_results_returns_serialised_docs(client, results_col):
 def test_list_results_multiple_docs(client, results_col):
     results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
     results_col.count_documents.return_value = 2
-    r = client.get("/api/results?limit=45&skip=0")
+    r = client.get("/api/results?limit=45&skip=0", cookies={"AUTH": f"{STR_ID}.{OTHER_STR_ID}"})
     results = r.json()
     data = results["data"]
     assert results["total"] == 2
@@ -101,10 +102,10 @@ def test_list_results_multiple_docs(client, results_col):
 def test_list_results_multiple_docs_skip(client, results_col):
     results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
     results_col.count_documents.return_value = 2
-    r = client.get("/api/results?limit=45&skip=1")
+    r = client.get("/api/results?limit=45&skip=1", cookies={"AUTH": f"{STR_ID}.{OTHER_STR_ID}"})
     results = r.json()
     data = results["data"]
-    assert results["total"] == 1
+    assert results["total"] == 2
     assert results["skip"] == 1
     assert results["limit"] == 45
     assert r.status_code == 200
@@ -113,10 +114,10 @@ def test_list_results_multiple_docs_skip(client, results_col):
 def test_list_results_multiple_docs_limit(client, results_col):
     results_col.find.return_value = FakeCursor([_make_result_doc(), _make_other_result_doc()])
     results_col.count_documents.return_value = 2
-    r = client.get("/api/results?limit=1&skip=0")
+    r = client.get("/api/results?limit=1&skip=0", cookies={"AUTH": f"{STR_ID}.{OTHER_STR_ID}"})
     results = r.json()
     data = results["data"]
-    assert results["total"] == 1
+    assert results["total"] == 2
     assert results["skip"] == 0
     assert results["limit"] == 1
     assert r.status_code == 200
@@ -133,6 +134,7 @@ def test_get_result_found(client, results_col):
     data = r.json()
     assert data["status"] == "complete"
     assert isinstance(data["_id"], str)
+    assert STR_ID in r.cookies.get("AUTH", "")
 
 
 def test_get_result_not_found_returns_404(client, results_col):
