@@ -108,6 +108,9 @@ schema_results = {
             "output": {
                 "bsonType": "object",
             },
+            "settings": {
+                "bsonType": "object",
+            },
             "expired_at": {"bsonType": "date"},
             "created_at": {"bsonType": "date"},
         },
