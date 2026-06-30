@@ -45,9 +45,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="iPhyloGeo API", version="1.0.0", lifespan=lifespan)
 
 _frontend_url = os.getenv("FRONTEND_URL", "https://i-phylo-geo-frontend.vercel.app")
+_allowed_origins = list({_frontend_url, "https://i-phylo-geo-frontend.vercel.app"})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[_frontend_url, "https://i-phylo-geo-frontend.vercel.app", "https://i-phylo-geo-frontend.vercel.app"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

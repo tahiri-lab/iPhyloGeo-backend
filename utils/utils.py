@@ -683,7 +683,14 @@ def make_cookie(
 
     # Create the string format for the cookie
     auth_cookie_value = ".".join(auth_ids)
-    response.set_cookie(name, auth_cookie_value, max_age=max_age)
+    response.set_cookie(
+        name,
+        auth_cookie_value,
+        max_age=max_age,
+        samesite="none",
+        secure=True,
+        httponly=True,
+    )
 
 
 def get_table_styles():
