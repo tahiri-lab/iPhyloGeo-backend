@@ -47,6 +47,7 @@ def test_create_job_returns_result_id(client, files_col, results_col):
     data = r.json()
     assert "result_id" in data
     assert data["result_id"] == STR_RESULT_ID
+    assert STR_RESULT_ID in r.cookies.get("AUTH", "")
 
 
 def test_create_job_enqueues_pipeline(client, files_col, results_col):

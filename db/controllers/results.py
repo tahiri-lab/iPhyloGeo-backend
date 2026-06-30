@@ -76,12 +76,19 @@ def get_result(id):
     return parse_document(res)
 
 
-def get_all_results(limit: int = 50, skip: int = 0):
+def get_all_results(ids: list, limit: int = 50, skip: int = 0):
+    if not ids:
+        return {"data": [], "total": 0}
+    valid_oids = [ObjectId(id) for id in ids if ObjectId.is_valid(str(id))]
+    if not valid_oids:
+        return {"data": [], "total": 0}
+    filt = {"_id": {"$in": valid_oids}}
+    total = results_db.count_documents(filt)
     data = [
         parse_document(r)
-        for r in results_db.find().sort("created_at", -1).skip(skip).limit(limit)
+        for r in results_db.find(filt).sort("created_at", -1).skip(skip).limit(limit)
     ]
-    return {"data": data, "total": len(data)}
+    return {"data": data, "total": total}
 
 
 def delete_result(id):
@@ -162,6 +169,8 @@ def parse_result(result):
         document["output"] = result["output"]
     if "name" in result:
         document["name"] = result["name"]
+    if "settings" in result:
+        document["settings"] = result["settings"]
 
     return document
 

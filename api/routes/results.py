@@ -8,20 +8,20 @@ GET    /api/results/{id}/download       → Excel file
 POST   /api/results/{id}/email          → send results-ready email
 """
 
-from asyncio.log import logger
 import io
 import logging
 from typing import Any
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from typing import Literal
 from pydantic import BaseModel
 
 import db.controllers.results as results_ctrl
 import utils.mail as mail
+from utils.utils import COOKIE_NAME, make_cookie
 
 import redis_client
 
@@ -44,9 +44,11 @@ def _serialize(obj: Any) -> Any:
 
 
 @router.get("")
-async def list_results(limit: int = 50, skip: int = 0):
+async def list_results(request: Request, limit: int = 50, skip: int = 0):
     try:
-        result = results_ctrl.get_all_results(limit=limit, skip=skip)
+        auth_cookie = request.cookies.get(COOKIE_NAME)
+        ids = [id for id in (auth_cookie or "").split(".") if id]
+        result = results_ctrl.get_all_results(ids=ids, limit=limit, skip=skip)
         return {
             "data": [_serialize(r) for r in result["data"]],
             "total": result["total"],
@@ -59,11 +61,12 @@ async def list_results(limit: int = 50, skip: int = 0):
 
 
 @router.get("/{result_id}")
-async def get_result(result_id: str):
+async def get_result(result_id: str, request: Request, response: Response):
     try:
         result = results_ctrl.get_result(result_id)
         if not result:
             raise HTTPException(404, "Result not found")
+        make_cookie(result_id, request.cookies.get(COOKIE_NAME), response)
         return _serialize(result)
     except HTTPException:
         raise
@@ -145,7 +148,8 @@ async def email_result(result_id: str, req: EmailRequest, request: Request, back
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(500, f"Failed to validate email: {exc}") from exc
+        logger.exception("Failed to validate email")
+        raise HTTPException(500, "Internal server error") from exc
 
     results_url = f"/results?id={result_id}"
     background_tasks.add_task(mail.send_results_ready_email, req.email, results_url, req.lang)

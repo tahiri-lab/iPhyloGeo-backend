@@ -12,13 +12,14 @@ from typing import Literal, Optional
 
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 import db.controllers.files as files_ctrl
 import db.controllers.results as results_ctrl
 import utils.background_tasks as background_tasks
 from db.db_validator import files_db
+from utils.utils import COOKIE_NAME, make_cookie
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -47,7 +48,7 @@ def _get_raw_file(file_id: str) -> dict:
 
 
 @router.post("")
-async def create_job(req: JobRequest):
+async def create_job(req: JobRequest, request: Request, response: Response):
     try:
         # ── Retrieve climatic data ────────────────────────────────────────────
         # Bypass str_csv_to_df (which skips row 0 assuming it's a header)
@@ -107,6 +108,8 @@ async def create_job(req: JobRequest):
         else:
             result_id = results_ctrl.create_result(result_payload)
 
+        make_cookie(str(result_id), request.cookies.get(COOKIE_NAME), response)
+
         # ── Enqueue pipeline ──────────────────────────────────────────────────
         background_tasks.run_pipeline_async(
             result_id=result_id,
@@ -133,4 +136,5 @@ async def get_job_status(result_id: str):
     try:
         return background_tasks.get_task_status(result_id)
     except Exception as exc:
-        raise HTTPException(500, f"Failed to get job status: {exc}") from exc
+        logger.exception("Failed to get job status")
+        raise HTTPException(500, "Internal server error") from exc
