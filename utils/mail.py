@@ -140,7 +140,7 @@ def verify_email_address(user_email):
     Error string or None
     """
     try:
-        validate_email(user_email, check_deliverability=False)
+        validate_email(user_email, check_deliverability=True)
         return None
     except EmailSyntaxError:
         return "The format of the email address is invalid"
